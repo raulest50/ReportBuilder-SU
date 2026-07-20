@@ -1,0 +1,43 @@
+report:
+  title: "Mercado de combustibles líquidos en Colombia"
+  area: "Coordinación de Regulación y Análisis de Sector"
+  history_years: 5
+  pages: 12
+  pdf_standard: "a-2b"
+  page_width_inches: 13.833
+  page_height_inches: 8.0
+
+sources:
+  datos_abiertos:
+    domain: "https://www.datos.gov.co"
+    dataset_id: "339g-zjac"
+    timeout_seconds: 120
+  sicom:
+    source: "liqs"
+    catalog: "SBI-Ordenes-Pedidos"
+    cube: "Ordenes-Pedidos"
+    timeout_seconds: 600
+
+business_rules:
+  national_measure: "volumen_despachado"
+  sicom_measure: "VOLUMEN ACEPTADO"
+  provider_type: "DISTRIBUIDOR MAYORISTA"
+  buyer_subtypes:
+    - "ESTACION DE SERVICIO AUTOMOTRIZ"
+    - "ESTACION DE SERVICIO FLUVIAL"
+    - "COMERCIALIZADOR INDUSTRIAL"
+  products:
+    - "GASOLINA MOTOR CORRIENTE"
+    - "GASOLINA MOTOR EXTRA"
+    - "BIODIESEL CON MEZCLA"
+
+assets:
+  logo: "assets/brand/nuevo_logo.png"
+  geography: "assets/geography/colombiaMod.json"
+
+paths:
+  data: "data"
+  build: "build"
+  dist: "dist"
+  olap_project: "tools/sicom-olap-cli/src/WinSbi.Olap.Cli/WinSbi.Olap.Cli.csproj"
+

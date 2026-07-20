@@ -1,0 +1,24 @@
+WITH
+SET [target_banderas] AS
+    ORDER(
+        NONEMPTY(
+            EXCEPT(
+                [BANDERA].[BANDERA].MEMBERS,
+                [BANDERA].[BANDERA].[ALL]
+            ),
+            [Measures].[AGENTE CANTIDAD]
+        ),
+        [Measures].[AGENTE CANTIDAD],
+        BDESC
+    )
+SELECT
+    {
+        [Measures].[AGENTE CANTIDAD],
+        [Measures].[REGISTROS CANTIDAD]
+    } ON COLUMNS,
+    [target_banderas] ON ROWS
+FROM [Agentes]
+WHERE (
+    [AGENTE].[NUEVO ESTADO].&[ACTIVO],
+    [SUBTIPO AGENTE].[SUBTIPO AGENTE].&[ESTACION DE SERVICIO AUTOMOTRIZ]
+)

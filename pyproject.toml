@@ -1,0 +1,62 @@
+[build-system]
+requires = ["hatchling>=1.27,<2"]
+build-backend = "hatchling.build"
+
+[project]
+name = "reportbuilder-su"
+version = "0.1.0"
+description = "Generador multiplataforma de informes trimestrales y semestrales de combustibles liquidos."
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.12,<3.13"
+authors = [{ name = "Coordinacion de Regulacion y Analisis de Sector" }]
+dependencies = [
+  "httpx>=0.28,<1",
+  "matplotlib>=3.10,<4",
+  "numpy>=2.2,<3",
+  "pandas>=2.2,<3",
+  "pillow>=11,<13",
+  "pymupdf>=1.25,<2",
+  "python-dotenv>=1.1,<2",
+  "pyyaml>=6,<7",
+  "rich>=14,<15",
+  "seaborn>=0.13,<0.14",
+  "squarify>=0.4,<0.5",
+  "textual>=6,<8",
+  "typer>=0.16,<1",
+]
+
+[project.scripts]
+su-report = "su_report.cli:main"
+
+[dependency-groups]
+dev = [
+  "mypy>=1.16,<2",
+  "pytest>=8.4,<9",
+  "pytest-asyncio>=1,<2",
+  "pytest-textual-snapshot>=1,<2",
+  "ruff>=0.12,<1",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/su_report"]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+ignore = ["E501"]
+
+[tool.mypy]
+python_version = "3.12"
+packages = ["su_report"]
+ignore_missing_imports = true
+warn_unused_ignores = true
+warn_return_any = true
+disallow_untyped_defs = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"

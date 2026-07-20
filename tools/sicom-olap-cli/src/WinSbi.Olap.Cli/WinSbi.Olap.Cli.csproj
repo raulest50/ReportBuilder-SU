@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <UserSecretsId>7a2ec140-43aa-46e6-9b20-2971f7e97f73</UserSecretsId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="System.CommandLine" Version="2.0.9" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../WinSbi.Olap.Core/WinSbi.Olap.Core.csproj" />
+  </ItemGroup>
+
+</Project>
