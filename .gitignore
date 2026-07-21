@@ -1,6 +1,5 @@
 .env
 .env.*
-!.env.example
 .venv/
 .python-version.local
 .local/
@@ -29,4 +28,3 @@ __pycache__/
 **/TestResults/
 **/reports/
 **/results-interactive-cli/
-
