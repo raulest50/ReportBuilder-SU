@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 
 import numpy as np
@@ -12,6 +13,14 @@ from su_report.reporting.style import MONTH_LABELS, fmt_millions, fmt_variation
 
 
 @dataclass(frozen=True, slots=True)
+class ZfdData:
+    summary: pd.DataFrame
+    products: pd.DataFrame
+    municipalities: pd.DataFrame
+    active_eds_queried_at_utc: str
+
+
+@dataclass(frozen=True, slots=True)
 class ReportData:
     monthly: pd.DataFrame
     departments: pd.DataFrame
@@ -21,6 +30,7 @@ class ReportData:
     eds_active: pd.DataFrame
     eds_volume: pd.DataFrame
     eds_top: EdsTopChartData
+    zfd: ZfdData
 
 
 def provider_alias(value: str) -> str:
@@ -94,6 +104,21 @@ def load_data(context: ReportContext) -> ReportData:
     eds_top = prepare_eds_top(
         pd.read_csv(context.input_dir / "eds-top-volumen.csv", dtype={"CODIGO_SICOM_COMPRADOR": str})
     )
+    zfd_manifest = json.loads(
+        (context.input_dir / "zfd-manifest.json").read_text(encoding="utf-8")
+    )
+    zfd = ZfdData(
+        summary=pd.read_csv(context.input_dir / "zfd-resumen.csv"),
+        products=pd.read_csv(context.input_dir / "zfd-productos.csv"),
+        municipalities=pd.read_csv(
+            context.input_dir / "zfd-municipios.csv",
+            dtype={
+                "CODIGO_DANE_DEPARTAMENTO": str,
+                "CODIGO_DANE_MUNICIPIO": str,
+            },
+        ),
+        active_eds_queried_at_utc=str(zfd_manifest["ActiveEdsQueriedAtUtc"]),
+    )
     return ReportData(
         monthly=monthly,
         departments=departments,
@@ -103,6 +128,7 @@ def load_data(context: ReportContext) -> ReportData:
         eds_active=eds_active,
         eds_volume=eds_volume,
         eds_top=eds_top,
+        zfd=zfd,
     )
 
 

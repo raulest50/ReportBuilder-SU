@@ -419,6 +419,39 @@ reportEdsInsights.SetAction(async (parseResult, cancellationToken) =>
     PrintEdsInsightsReportResult(result);
     return 0;
 });
+var reportEdsFrontera = new Command("eds_frontera", "Generate focused border-zone CSVs for the SU report.");
+reportEdsFrontera.Options.Add(yearOption);
+reportEdsFrontera.Options.Add(quarterOption);
+reportEdsFrontera.Options.Add(semesterOption);
+reportEdsFrontera.Options.Add(annualOption);
+reportEdsFrontera.Options.Add(monthsOption);
+reportEdsFrontera.Options.Add(outputDirOption);
+AddConnectionOptions(reportEdsFrontera, includeDebug: true);
+reportEdsFrontera.SetAction(async (parseResult, cancellationToken) =>
+{
+    var year = parseResult.GetValue(yearOption) ??
+               throw new ArgumentException("--year is required for report eds_frontera.");
+    var options = EdsFronteraReport.CreateOptions(
+        year,
+        parseResult.GetValue(quarterOption),
+        parseResult.GetValue(semesterOption),
+        parseResult.GetValue(annualOption),
+        parseResult.GetValue(monthsOption));
+    var outputDirectory = parseResult.GetValue(outputDirOption) ??
+                          EdsFronteraReport.DefaultOutputDirectory(options);
+    var context = CreateContext(parseResult, format: "table", outputPath: null);
+    var client = XmlaClient.Create(context.Connection);
+    var equivalentCommand = EdsFronteraReport.BuildEquivalentCommand(options, outputDirectory);
+    var result = await EdsFronteraReport.GenerateAsync(
+        client,
+        options,
+        outputDirectory,
+        equivalentCommand,
+        context.DebugOptions,
+        cancellationToken);
+    PrintEdsFronteraReportResult(result);
+    return 0;
+});
 var reportEdsTop = new Command("eds_top", "Generate a measure-consistent Top EDS CSV for report charts.");
 reportEdsTop.Options.Add(yearOption);
 reportEdsTop.Options.Add(quarterOption);
@@ -493,6 +526,7 @@ report.Subcommands.Add(reportMayoristas);
 report.Subcommands.Add(reportMayoristasHistorico);
 report.Subcommands.Add(reportEdsMunicipios);
 report.Subcommands.Add(reportEdsInsights);
+report.Subcommands.Add(reportEdsFrontera);
 report.Subcommands.Add(reportEdsTop);
 report.Subcommands.Add(reportEdsPercentiles);
 
@@ -1124,6 +1158,20 @@ void PrintEdsInsightsReportResult(EdsInsightsReportResult result)
     Console.WriteLine();
     Console.WriteLine("Primeras filas de banderas nacional:");
     Console.WriteLine(OutputFormatters.ToText(PreviewTable(result.NationalFlagsTable, 20)));
+}
+
+void PrintEdsFronteraReportResult(EdsFronteraReportResult result)
+{
+    Console.WriteLine("Reporte generado.");
+    Console.WriteLine($"Resumen ZFD: {Path.GetFullPath(result.SummaryCsvPath)}");
+    Console.WriteLine($"Productos ZFD: {Path.GetFullPath(result.ProductsCsvPath)}");
+    Console.WriteLine($"Municipios ZFD: {Path.GetFullPath(result.MunicipalitiesCsvPath)}");
+    Console.WriteLine($"Manifiesto: {Path.GetFullPath(result.ManifestPath)}");
+    Console.WriteLine();
+    Console.WriteLine("Comando equivalente:");
+    Console.WriteLine(result.EquivalentCommand);
+    Console.WriteLine();
+    Console.WriteLine(OutputFormatters.ToText(result.SummaryTable));
 }
 
 void PrintEdsTopReportResult(EdsTopReportResult result)

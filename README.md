@@ -101,7 +101,7 @@ dist/<periodo>/       PDF, métricas y manifiesto
 Estas carpetas están ignoradas por Git. Consulte [docs/SETUP.md](docs/SETUP.md)
 para el proceso completo y las notas de portabilidad, y
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) para los contratos de datos y la
-especificación de las 13 páginas.
+especificación de las 14 páginas.
 
 La composición visual está dividida en un módulo Python por página bajo
 `src/su_report/reporting/pages`. El registro ordenado y la escritura de SVG se

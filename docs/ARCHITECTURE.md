@@ -57,12 +57,15 @@ cantidad distinta de la configurada.
 | `eds-municipios.csv` | municipio × año × mes × producto | volumen aceptado |
 | `eds-activas.csv` | municipio | EDS automotrices activas |
 | `eds-top-volumen.csv` | rango × EDS automotriz | volumen despachado y participación nacional |
+| `zfd-resumen.csv` | zona frontera × periodo | volumen despachado, variación, EDS activas e intensidad |
+| `zfd-productos.csv` | zona frontera × producto | volumen despachado y mezcla de producto |
+| `zfd-municipios.csv` | rango × municipio ZFD | volumen despachado y participación fronteriza |
 
 No se permite sumar, sustituir ni presentar como equivalentes las medidas de
 Datos Abiertos y SICOM. Los CSV son reproducibles, pero deliberadamente quedan
 fuera de Git.
 
-## Especificación de las 13 páginas
+## Especificación de las 14 páginas
 
 1. Portada y marca de borrador cuando el periodo está incompleto.
 2. Comportamiento mensual nacional y comparación interanual.
@@ -76,7 +79,8 @@ fuera de Git.
 10. Tablas municipales.
 11. EDS activas, volumen aceptado y galones/mes/EDS por municipio.
 12. Top 20 EDS automotrices por volumen despachado y participación nacional.
-13. Conclusiones calculadas desde los datos del periodo.
+13. Comparación de zonas de frontera frente al resto del país con volumen despachado, EDS activas, top municipal y mezcla de producto.
+14. Conclusiones calculadas desde los datos del periodo.
 
 ## Reproducibilidad y límites
 
@@ -90,4 +94,4 @@ fuera de Git.
 - Un faltante parcial de meses en periodos trimestrales o semestrales produce
   un borrador visible. Un informe anual exige los doce meses completos.
 - La ausencia total de una fuente o de un producto requerido detiene el proceso.
-- La validación final exige 13 páginas de 13.833 × 8 pulgadas.
+- La validación final exige 14 páginas de 13.833 × 8 pulgadas.

@@ -272,6 +272,26 @@ public sealed record EdsInsightsReportResult(
     MdxTable BorderProductsTable,
     string EquivalentCommand);
 
+public sealed record EdsFronteraReportOptions(
+    int Year,
+    IReadOnlyList<int> Months,
+    string PeriodLabel,
+    string PeriodCommandPart,
+    int TopMunicipalities);
+
+public sealed record EdsFronteraReportResult(
+    EdsFronteraReportOptions Options,
+    string OutputDirectory,
+    string SummaryCsvPath,
+    string ProductsCsvPath,
+    string MunicipalitiesCsvPath,
+    string ManifestPath,
+    MdxTable SummaryTable,
+    MdxTable ProductsTable,
+    MdxTable MunicipalitiesTable,
+    string EquivalentCommand,
+    DateTimeOffset ActiveEdsQueriedAtUtc);
+
 public sealed record EdsTopReportOptions(
     int Year,
     IReadOnlyList<int> Months,

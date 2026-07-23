@@ -46,6 +46,7 @@ DEFAULT_PERIOD = PeriodSpec.previous_completed().code
 DEFAULT_MAYORISTAS_DIR = Path("data/manual-olap/mayoristas")
 DEFAULT_EDS_MUNICIPIOS_DIR = Path("data/manual-olap/eds-municipios")
 DEFAULT_EDS_INSIGHTS_DIR = Path("data/manual-olap/eds-insights")
+DEFAULT_EDS_FRONTERA_DIR = Path("data/manual-olap/eds-frontera")
 DEFAULT_EDS_TOP_DIR = Path("data/manual-olap/eds-top")
 DEFAULT_EDS_PERCENTILES_DIR = Path("data/manual-olap/eds-percentiles")
 
@@ -292,6 +293,28 @@ def report_eds_insights(
     arguments = _report_arguments("eds_insights", period, output_dir, source, product)
     arguments.extend(["--top-cities", str(top_cities), "--top-eds", str(top_eds)])
     _olap_run(arguments)
+
+
+@olap_report_app.command("eds-frontera")
+def report_eds_frontera(
+    period: PeriodOption = DEFAULT_PERIOD,
+    output_dir: Annotated[Path, typer.Option("--output-dir")] = DEFAULT_EDS_FRONTERA_DIR,
+    source: SourceOption = "liqs",
+) -> None:
+    """Genera los contratos enfocados de zonas de frontera."""
+    _olap_run(
+        [
+            "report",
+            "eds_frontera",
+            *_period(period).olap_arguments(),
+            "--source",
+            source,
+            "--timeout",
+            "600",
+            "--output-dir",
+            str(output_dir),
+        ]
+    )
 
 
 @olap_report_app.command("eds-top")

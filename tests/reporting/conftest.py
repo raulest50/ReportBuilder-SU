@@ -8,7 +8,7 @@ import pytest
 from su_report.charts.eds_top import prepare_eds_top
 from su_report.charts.mayoristas_historico import STACK_ORDER, HistoricalChartData
 from su_report.reporting.context import ReportContext
-from su_report.reporting.data import ReportData
+from su_report.reporting.data import ReportData, ZfdData
 from su_report.reporting.style import configure_matplotlib
 
 
@@ -44,7 +44,7 @@ def report_context(tmp_path: Path) -> ReportContext:
         period_title="Segundo trimestre de 2026",
         period_noun="trimestre",
         period_short="Trim. 2",
-        page_count=13,
+        page_count=14,
         months=(4, 5, 6),
         history_start_year=2022,
         historical_start_period="2025-01",
@@ -179,6 +179,78 @@ def _eds_frames() -> tuple[pd.DataFrame, pd.DataFrame]:
     return pd.DataFrame(active_rows), pd.DataFrame(volume_rows)
 
 
+def _zfd() -> ZfdData:
+    summary = pd.DataFrame(
+        [
+            {
+                "ZONA_FRONTERA": "SI",
+                "VOLUMEN_DESPACHADO_ANIO_ANTERIOR": 166_620_000,
+                "VOLUMEN_DESPACHADO": 164_210_000,
+                "CAMBIO_ABSOLUTO_DESPACHADO": -2_410_000,
+                "VAR_INTERANUAL_DESPACHADO_PCT": -1.45,
+                "EDS_ACTIVAS": 1_541,
+                "PARTICIPACION_EDS_NACIONAL_PCT": 25.10,
+                "PARTICIPACION_VOLUMEN_NACIONAL_PCT": 15.50,
+                "GAL_MES_EDS_DESPACHADO": 35_520,
+            },
+            {
+                "ZONA_FRONTERA": "NO",
+                "VOLUMEN_DESPACHADO_ANIO_ANTERIOR": 852_110_000,
+                "VOLUMEN_DESPACHADO": 895_160_000,
+                "CAMBIO_ABSOLUTO_DESPACHADO": 43_050_000,
+                "VAR_INTERANUAL_DESPACHADO_PCT": 5.05,
+                "EDS_ACTIVAS": 4_598,
+                "PARTICIPACION_EDS_NACIONAL_PCT": 74.90,
+                "PARTICIPACION_VOLUMEN_NACIONAL_PCT": 84.50,
+                "GAL_MES_EDS_DESPACHADO": 64_895,
+            },
+            {
+                "ZONA_FRONTERA": "TOTAL NACIONAL",
+                "VOLUMEN_DESPACHADO_ANIO_ANTERIOR": 1_018_730_000,
+                "VOLUMEN_DESPACHADO": 1_059_370_000,
+                "CAMBIO_ABSOLUTO_DESPACHADO": 40_640_000,
+                "VAR_INTERANUAL_DESPACHADO_PCT": 3.99,
+                "EDS_ACTIVAS": 6_139,
+                "PARTICIPACION_EDS_NACIONAL_PCT": 100.0,
+                "PARTICIPACION_VOLUMEN_NACIONAL_PCT": 100.0,
+                "GAL_MES_EDS_DESPACHADO": 57_521,
+            },
+        ]
+    )
+    products = pd.DataFrame(
+        [
+            {"ZONA_FRONTERA": zone, "PRODUCTO_CANONICO": product, "PARTICIPACION_PRODUCTO_EN_ZONA_PCT": share}
+            for zone, values in {
+                "SI": (("corriente", 47.11), ("diesel", 52.60), ("extra", 0.29)),
+                "NO": (("corriente", 53.56), ("diesel", 44.32), ("extra", 2.12)),
+            }.items()
+            for product, share in values
+        ]
+    )
+    municipalities = pd.DataFrame(
+        [
+            {
+                "RANK_MUNICIPIO": rank,
+                "DEPARTAMENTO": department,
+                "MUNICIPIO": municipality,
+                "VOLUMEN_DESPACHADO": volume,
+                "PARTICIPACION_VOLUMEN_FRONTERA_PCT": share,
+            }
+            for rank, (municipality, department, volume, share) in enumerate(
+                [
+                    ("VALLEDUPAR", "CESAR", 12_900_000, 7.85),
+                    ("AGUACHICA", "CESAR", 12_780_000, 7.78),
+                    ("PASTO", "NARIÑO", 12_690_000, 7.73),
+                    ("SAN JOSE DE CUCUTA", "NORTE DE SANTANDER", 10_840_000, 6.60),
+                    ("LOS PATIOS", "NORTE DE SANTANDER", 6_110_000, 3.72),
+                ],
+                start=1,
+            )
+        ]
+    )
+    return ZfdData(summary, products, municipalities, "2026-07-22T15:00:00Z")
+
+
 @pytest.fixture
 def report_data() -> ReportData:
     departments = [
@@ -200,4 +272,5 @@ def report_data() -> ReportData:
         eds_active=eds_active,
         eds_volume=eds_volume,
         eds_top=_eds_top(),
+        zfd=_zfd(),
     )

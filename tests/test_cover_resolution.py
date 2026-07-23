@@ -52,7 +52,7 @@ def test_runtime_config_exposes_annual_labels_and_page_count() -> None:
     assert runtime["report"]["period_noun"] == "año"
     assert runtime["report"]["period_short"] == "Año"
     assert runtime["report"]["months"] == list(range(1, 13))
-    assert runtime["report"]["pages"] == 13
+    assert runtime["report"]["pages"] == 14
 
 
 def test_render_cli_defaults_to_2k(monkeypatch: pytest.MonkeyPatch) -> None:

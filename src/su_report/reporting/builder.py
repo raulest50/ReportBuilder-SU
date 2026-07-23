@@ -27,7 +27,8 @@ from su_report.reporting.pages.page_09_departments_table import render as render
 from su_report.reporting.pages.page_10_municipalities_table import render as render_page_10
 from su_report.reporting.pages.page_11_eds import render as render_page_11
 from su_report.reporting.pages.page_12_top_eds import render as render_page_12
-from su_report.reporting.pages.page_13_conclusions import render as render_page_13
+from su_report.reporting.pages.page_13_conclusions import render as render_page_14
+from su_report.reporting.pages.page_13_zfd import render as render_page_13
 from su_report.reporting.style import PRODUCTS, configure_matplotlib
 
 PageRenderer = Callable[[ReportContext, ReportData], PageResult]
@@ -53,7 +54,8 @@ PAGE_SPECS: tuple[PageSpec, ...] = (
     PageSpec(10, "municipalities-table", render_page_10),
     PageSpec(11, "eds", render_page_11),
     PageSpec(12, "top-eds", render_page_12),
-    PageSpec(13, "conclusions", render_page_13),
+    PageSpec(13, "zfd", render_page_13),
+    PageSpec(14, "conclusions", render_page_14),
 )
 
 
@@ -113,6 +115,10 @@ def build_metrics(
             "top_eds_page_12": (
                 "VOLUMEN DESPACHADO; EDS automotrices; tres combustibles (SICOM OLAP)"
             ),
+            "zfd_page_13": (
+                "VOLUMEN DESPACHADO; EDS automotrices; tres combustibles; zonas SI/NO "
+                "(SICOM OLAP). EDS activas: fotografía al momento de consulta de SBI-Agentes"
+            ),
         },
         "historical_market_share": historical_validation_payload(
             data.mayoristas_historico,
@@ -122,6 +128,16 @@ def build_metrics(
         ),
         "national_volume_gallons": report_totals,
         "national_variation_pct": page_metrics,
+        "zfd": {
+            "measure": "VOLUMEN DESPACHADO",
+            "buyer_scope": "ESTACION DE SERVICIO AUTOMOTRIZ",
+            "active_eds_queried_at_utc": data.zfd.active_eds_queried_at_utc,
+            "summary": json.loads(data.zfd.summary.to_json(orient="records")),
+            "products": json.loads(data.zfd.products.to_json(orient="records")),
+            "top_municipalities": json.loads(
+                data.zfd.municipalities.to_json(orient="records")
+            ),
+        },
         "source_files": sorted(path.name for path in context.input_dir.glob("*.csv")),
         "pages": context.page_count,
     }

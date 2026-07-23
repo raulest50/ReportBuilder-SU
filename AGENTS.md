@@ -2,7 +2,7 @@
 
 ## Propósito
 
-`ReportBuilder-SU` genera informes PDF trimestrales, semestrales y anuales de 13 páginas.
+`ReportBuilder-SU` genera informes PDF trimestrales, semestrales y anuales de 14 páginas.
 Es un proyecto independiente y multiplataforma. No debe depender de rutas del
 workspace que lo originó.
 
@@ -53,6 +53,8 @@ dotnet test tools/sicom-olap-cli/tests/WinSbi.Olap.Tests/WinSbi.Olap.Tests.cspro
 - `BIODIESEL CON MEZCLA` representa ACPM; no incorporar diésel marino.
 - Nunca mezclar o sumar volumen aceptado y despachado.
 - Los meses se derivan del periodo; nunca escribir rangos manualmente.
+- Para definición, jerarquías, medida, fórmulas y cautelas de Zona de Frontera,
+  usar como fuente canónica la sección `Zona de Frontera (ZFD)` de `../AGENTS.md`.
 
 ## Seguridad
 
@@ -66,7 +68,7 @@ dotnet test tools/sicom-olap-cli/tests/WinSbi.Olap.Tests/WinSbi.Olap.Tests.cspro
 
 - Periodos aceptados: `YYYY-Q1..Q4`, `YYYY-S1..S2` y `YYYY-A`.
 - Un periodo incompleto genera un PDF marcado como parcial, no un fallo.
-- Salida esperada: 13 páginas, 13.833 × 8 pulgadas y PDF/A-2b.
+- Salida esperada: 14 páginas, 13.833 × 8 pulgadas y PDF/A-2b.
 - El manifiesto debe registrar fuentes, meses encontrados, advertencias, hashes
   y versiones de herramientas, pero nunca secretos.
 - Antes de cambiar el diseño, comparar contra el PDF de referencia de 2026-Q2.

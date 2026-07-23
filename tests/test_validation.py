@@ -165,6 +165,105 @@ def _write_annual_inputs(directory: Path, *, missing_national_month: int | None 
         encoding="utf-8",
     )
 
+    pd.DataFrame(
+        [
+            {
+                "ZONA_FRONTERA": "SI",
+                "VOLUMEN_DESPACHADO_ANIO_ANTERIOR": 1_000,
+                "VOLUMEN_DESPACHADO": 1_100,
+                "CAMBIO_ABSOLUTO_DESPACHADO": 100,
+                "VAR_INTERANUAL_DESPACHADO_PCT": 10,
+                "EDS_ACTIVAS": 10,
+                "PARTICIPACION_EDS_NACIONAL_PCT": 20,
+                "PARTICIPACION_VOLUMEN_NACIONAL_PCT": 22,
+                "GAL_MES_EDS_DESPACHADO": 1_100 / 12 / 10,
+            },
+            {
+                "ZONA_FRONTERA": "NO",
+                "VOLUMEN_DESPACHADO_ANIO_ANTERIOR": 4_000,
+                "VOLUMEN_DESPACHADO": 3_900,
+                "CAMBIO_ABSOLUTO_DESPACHADO": -100,
+                "VAR_INTERANUAL_DESPACHADO_PCT": -2.5,
+                "EDS_ACTIVAS": 40,
+                "PARTICIPACION_EDS_NACIONAL_PCT": 80,
+                "PARTICIPACION_VOLUMEN_NACIONAL_PCT": 78,
+                "GAL_MES_EDS_DESPACHADO": 3_900 / 12 / 40,
+            },
+            {
+                "ZONA_FRONTERA": "TOTAL NACIONAL",
+                "VOLUMEN_DESPACHADO_ANIO_ANTERIOR": 5_000,
+                "VOLUMEN_DESPACHADO": 5_000,
+                "CAMBIO_ABSOLUTO_DESPACHADO": 0,
+                "VAR_INTERANUAL_DESPACHADO_PCT": 0,
+                "EDS_ACTIVAS": 50,
+                "PARTICIPACION_EDS_NACIONAL_PCT": 100,
+                "PARTICIPACION_VOLUMEN_NACIONAL_PCT": 100,
+                "GAL_MES_EDS_DESPACHADO": 5_000 / 12 / 50,
+            },
+        ]
+    ).to_csv(directory / "zfd-resumen.csv", index=False)
+    pd.DataFrame(
+        [
+            {
+                "ZONA_FRONTERA": zone,
+                "PRODUCTO": product_name,
+                "PRODUCTO_CANONICO": canonical,
+                "VOLUMEN_DESPACHADO": zone_total * share / 100,
+                "PARTICIPACION_PRODUCTO_EN_ZONA_PCT": share,
+            }
+            for zone, zone_total in (("SI", 1_100), ("NO", 3_900))
+            for product_name, canonical, share in (
+                ("GASOLINA MOTOR CORRIENTE", "corriente", 50),
+                ("BIODIESEL CON MEZCLA", "diesel", 40),
+                ("GASOLINA MOTOR EXTRA", "extra", 10),
+            )
+        ]
+    ).to_csv(directory / "zfd-productos.csv", index=False)
+    frontier_total = 1_100
+    pd.DataFrame(
+        [
+            {
+                "RANK_MUNICIPIO": rank,
+                "CODIGO_DANE_DEPARTAMENTO": "20",
+                "DEPARTAMENTO": "CESAR",
+                "CODIGO_DANE_MUNICIPIO": f"2000{rank}",
+                "MUNICIPIO": f"MUNICIPIO {rank}",
+                "VOLUMEN_DESPACHADO": volume,
+                "PARTICIPACION_VOLUMEN_FRONTERA_PCT": volume * 100 / frontier_total,
+            }
+            for rank, volume in enumerate((250, 220, 200, 180, 150), start=1)
+        ]
+    ).to_csv(directory / "zfd-municipios.csv", index=False)
+    (directory / "zfd-manifest.json").write_text(
+        json.dumps(
+            {
+                "SchemaVersion": 1,
+                "Report": "eds_frontera",
+                "Status": "complete",
+                "Catalog": "SBI-Ordenes-Pedidos",
+                "Cube": "Ordenes-Pedidos",
+                "AgentsCatalog": "SBI-Agentes",
+                "AgentsCube": "Agentes",
+                "Year": 2025,
+                "Months": list(range(1, 13)),
+                "PeriodLabel": "2025-A",
+                "Measure": "dispatched",
+                "Products": [
+                    "BIODIESEL CON MEZCLA",
+                    "GASOLINA MOTOR CORRIENTE",
+                    "GASOLINA MOTOR EXTRA",
+                ],
+                "BuyerScope": "ESTACION DE SERVICIO AUTOMOTRIZ",
+                "TopMunicipalities": 5,
+                "SummaryRowCount": 3,
+                "ProductRowCount": 6,
+                "MunicipalityRowCount": 5,
+                "ActiveEdsQueriedAtUtc": "2026-07-22T15:00:00Z",
+            }
+        ),
+        encoding="utf-8",
+    )
+
 
 def test_validate_processed_accepts_complete_annual_period(tmp_path: Path) -> None:
     _write_annual_inputs(tmp_path)
@@ -187,3 +286,36 @@ def test_validate_processed_rejects_top_eds_measure_mismatch(tmp_path: Path) -> 
     frame.to_csv(path, index=False)
     with pytest.raises(ValueError, match="MEDIDA_RANKING"):
         validate_processed(PeriodSpec.parse("2025-A"), tmp_path, "2025-01")
+
+
+def test_validate_processed_rejects_zfd_percentage_mismatch(tmp_path: Path) -> None:
+    _write_annual_inputs(tmp_path)
+    path = tmp_path / "zfd-resumen.csv"
+    frame = pd.read_csv(path)
+    frame.loc[0, "PARTICIPACION_VOLUMEN_NACIONAL_PCT"] = 99
+    frame.to_csv(path, index=False)
+    with pytest.raises(ValueError, match="participación nacional de volumen"):
+        validate_processed(PeriodSpec.parse("2025-A"), tmp_path, "2025-01")
+
+
+def test_validate_processed_accepts_undefined_zfd_variation_for_zero_base(
+    tmp_path: Path,
+) -> None:
+    _write_annual_inputs(tmp_path)
+    path = tmp_path / "zfd-resumen.csv"
+    frame = pd.read_csv(path)
+    frame.loc[0, ["VOLUMEN_DESPACHADO_ANIO_ANTERIOR", "CAMBIO_ABSOLUTO_DESPACHADO"]] = [
+        0,
+        1_100,
+    ]
+    frame.loc[0, "VAR_INTERANUAL_DESPACHADO_PCT"] = float("nan")
+    frame.loc[2, ["VOLUMEN_DESPACHADO_ANIO_ANTERIOR", "CAMBIO_ABSOLUTO_DESPACHADO"]] = [
+        4_000,
+        1_000,
+    ]
+    frame.loc[2, "VAR_INTERANUAL_DESPACHADO_PCT"] = 25
+    frame.to_csv(path, index=False)
+
+    result = validate_processed(PeriodSpec.parse("2025-A"), tmp_path, "2025-01")
+
+    assert result.partial is False

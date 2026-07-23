@@ -186,6 +186,26 @@ class OlapGateway:
             on_output=on_output,
         )
 
+    def report_eds_frontera(
+        self,
+        period_arguments: Sequence[str],
+        output_dir: Path,
+        *,
+        on_output: Callable[[str], None] | None = None,
+    ) -> OlapResult:
+        return self._run_with_retries(
+            [
+                "report",
+                "eds_frontera",
+                *period_arguments,
+                "--timeout",
+                "600",
+                "--output-dir",
+                str(output_dir),
+            ],
+            on_output=on_output,
+        )
+
     def report_eds_top(
         self,
         period_arguments: Sequence[str],

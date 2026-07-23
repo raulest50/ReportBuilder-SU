@@ -102,3 +102,29 @@ def test_eds_top_gateway_uses_dispatched_top_20_contract(monkeypatch, tmp_path) 
         "--output-dir",
         str(tmp_path),
     ]
+
+
+def test_eds_frontera_gateway_uses_focused_contract(monkeypatch, tmp_path) -> None:
+    gateway = OlapGateway(Settings(root=Settings.load().root, config={}))
+    captured: list[str] = []
+
+    def fake_run(arguments, *, on_output=None, attempts=3):
+        del on_output, attempts
+        captured.extend(arguments)
+        return OlapResult(tuple(arguments), 0, "ok")
+
+    monkeypatch.setattr(gateway, "_run_with_retries", fake_run)
+    gateway.report_eds_frontera(["--year", "2026", "--quarter", "2"], tmp_path)
+
+    assert captured == [
+        "report",
+        "eds_frontera",
+        "--year",
+        "2026",
+        "--quarter",
+        "2",
+        "--timeout",
+        "600",
+        "--output-dir",
+        str(tmp_path),
+    ]

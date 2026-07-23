@@ -204,6 +204,14 @@ class ReportPipeline:
             on_output=lambda line: self._emit(PipelineStage.OLAP_EDS, line),
         )
 
+        zfd_dir = paths.raw_dir / "sicom" / "eds-frontera"
+        self._emit(PipelineStage.OLAP_EDS, f"Consultando zonas de frontera {period.code}", 0.64)
+        self.olap.report_eds_frontera(
+            period.olap_arguments(),
+            zfd_dir,
+            on_output=lambda line: self._emit(PipelineStage.OLAP_EDS, line),
+        )
+
         eds_top_dir = paths.raw_dir / "sicom" / "eds-top"
         self._emit(PipelineStage.OLAP_EDS, f"Consultando Top 20 EDS {period.code}", 0.67)
         self.olap.report_eds_top(
@@ -214,7 +222,15 @@ class ReportPipeline:
         self._emit(PipelineStage.OLAP_EDS, "Extracción SICOM completada", 0.72)
 
         self._emit(PipelineStage.NORMALIZE, "Normalizando contratos de datos", 0.76)
-        self._normalize(paths, open_outputs, mayoristas_files, historical_dir, eds_dir, eds_top_dir)
+        self._normalize(
+            paths,
+            open_outputs,
+            mayoristas_files,
+            historical_dir,
+            eds_dir,
+            zfd_dir,
+            eds_top_dir,
+        )
         validation = validate_processed(
             period,
             paths.processed_dir,
@@ -235,6 +251,7 @@ class ReportPipeline:
         mayoristas_files: list[Path],
         historical_dir: Path,
         eds_dir: Path,
+        zfd_dir: Path,
         eds_top_dir: Path,
     ) -> None:
         _copy(open_outputs["national"], paths.processed_dir / "national-monthly.csv")
@@ -277,6 +294,10 @@ class ReportPipeline:
 
         _copy(eds_dir / "eds-municipios-detalle.csv", paths.processed_dir / "eds-municipios.csv")
         _copy(eds_dir / "eds-municipios-eds-activas.csv", paths.processed_dir / "eds-activas.csv")
+        _copy(zfd_dir / "zfd-resumen.csv", paths.processed_dir / "zfd-resumen.csv")
+        _copy(zfd_dir / "zfd-productos.csv", paths.processed_dir / "zfd-productos.csv")
+        _copy(zfd_dir / "zfd-municipios.csv", paths.processed_dir / "zfd-municipios.csv")
+        _copy(zfd_dir / "zfd-manifest.json", paths.processed_dir / "zfd-manifest.json")
         _copy(eds_top_dir / "eds-top-volumen.csv", paths.processed_dir / "eds-top-volumen.csv")
         _copy(eds_top_dir / "eds-top-manifest.json", paths.processed_dir / "eds-top-manifest.json")
 

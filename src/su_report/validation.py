@@ -4,7 +4,7 @@ import json
 import math
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import pandas as pd
 
@@ -23,6 +23,36 @@ TOP_EDS_COLUMNS = {
     "MEDIDA_RANKING",
     "VOLUMEN_RANKING",
     "PARTICIPACION_NACIONAL_PCT",
+}
+
+ZFD_SUMMARY_COLUMNS = {
+    "ZONA_FRONTERA",
+    "VOLUMEN_DESPACHADO_ANIO_ANTERIOR",
+    "VOLUMEN_DESPACHADO",
+    "CAMBIO_ABSOLUTO_DESPACHADO",
+    "VAR_INTERANUAL_DESPACHADO_PCT",
+    "EDS_ACTIVAS",
+    "PARTICIPACION_EDS_NACIONAL_PCT",
+    "PARTICIPACION_VOLUMEN_NACIONAL_PCT",
+    "GAL_MES_EDS_DESPACHADO",
+}
+
+ZFD_PRODUCT_COLUMNS = {
+    "ZONA_FRONTERA",
+    "PRODUCTO",
+    "PRODUCTO_CANONICO",
+    "VOLUMEN_DESPACHADO",
+    "PARTICIPACION_PRODUCTO_EN_ZONA_PCT",
+}
+
+ZFD_MUNICIPALITY_COLUMNS = {
+    "RANK_MUNICIPIO",
+    "CODIGO_DANE_DEPARTAMENTO",
+    "DEPARTAMENTO",
+    "CODIGO_DANE_MUNICIPIO",
+    "MUNICIPIO",
+    "VOLUMEN_DESPACHADO",
+    "PARTICIPACION_VOLUMEN_FRONTERA_PCT",
 }
 
 
@@ -166,6 +196,176 @@ def _validate_eds_top(period: PeriodSpec, processed_dir: Path) -> tuple[pd.DataF
     return frame, manifest
 
 
+def _numeric_series(frame: pd.DataFrame, column: str, label: str) -> pd.Series:
+    values = pd.to_numeric(frame[column], errors="coerce")
+    if values.isna().any() or not values.map(math.isfinite).all():
+        raise ValueError(f"{label} contiene valores no numéricos en {column}.")
+    return values.astype(float)
+
+
+def _validate_zfd(period: PeriodSpec, processed_dir: Path) -> dict[str, Any]:
+    summary = _require_columns(processed_dir / "zfd-resumen.csv", ZFD_SUMMARY_COLUMNS)
+    products = _require_columns(processed_dir / "zfd-productos.csv", ZFD_PRODUCT_COLUMNS)
+    municipalities = _require_columns(
+        processed_dir / "zfd-municipios.csv", ZFD_MUNICIPALITY_COLUMNS
+    )
+
+    expected_zones = ["SI", "NO", "TOTAL NACIONAL"]
+    zones = summary["ZONA_FRONTERA"].astype(str).str.strip().str.upper().tolist()
+    if zones != expected_zones:
+        raise ValueError("zfd-resumen.csv debe contener SI, NO y TOTAL NACIONAL en ese orden.")
+
+    nonnegative_summary = (
+        "VOLUMEN_DESPACHADO_ANIO_ANTERIOR",
+        "VOLUMEN_DESPACHADO",
+        "EDS_ACTIVAS",
+        "PARTICIPACION_EDS_NACIONAL_PCT",
+        "PARTICIPACION_VOLUMEN_NACIONAL_PCT",
+        "GAL_MES_EDS_DESPACHADO",
+    )
+    summary_numeric: dict[str, pd.Series] = {}
+    for column in nonnegative_summary:
+        values = _numeric_series(summary, column, "Resumen ZFD")
+        if (values < 0).any():
+            raise ValueError(f"Resumen ZFD contiene valores negativos en {column}.")
+        summary_numeric[column] = values
+    changes = _numeric_series(summary, "CAMBIO_ABSOLUTO_DESPACHADO", "Resumen ZFD")
+    previous = summary_numeric["VOLUMEN_DESPACHADO_ANIO_ANTERIOR"]
+    current = summary_numeric["VOLUMEN_DESPACHADO"]
+    if ((current - previous - changes).abs() > 1e-6).any():
+        raise ValueError("CAMBIO_ABSOLUTO_DESPACHADO no coincide con los volúmenes ZFD.")
+    variation = pd.to_numeric(summary["VAR_INTERANUAL_DESPACHADO_PCT"], errors="coerce")
+    invalid_variation = previous.gt(0) & variation.isna()
+    if invalid_variation.any():
+        raise ValueError("La variación ZFD solo puede ser n/d cuando el volumen anterior es cero.")
+    expected_variation = (current - previous) * 100 / previous.where(previous.ne(0))
+    comparable = previous.gt(0)
+    if (variation[comparable] - expected_variation[comparable]).abs().max() > 1e-5:
+        raise ValueError("VAR_INTERANUAL_DESPACHADO_PCT no es recalculable.")
+    national = summary.iloc[2]
+    for column in ("VOLUMEN_DESPACHADO_ANIO_ANTERIOR", "VOLUMEN_DESPACHADO", "EDS_ACTIVAS"):
+        components = float(summary.loc[:1, column].sum())
+        if not math.isclose(float(national[column]), components, rel_tol=0, abs_tol=1e-6):
+            raise ValueError(f"El total nacional ZFD no coincide con SI + NO en {column}.")
+    national_current = float(national["VOLUMEN_DESPACHADO"])
+    national_active = float(national["EDS_ACTIVAS"])
+    for index, row in summary.iterrows():
+        current_volume = float(row["VOLUMEN_DESPACHADO"])
+        active_eds = float(row["EDS_ACTIVAS"])
+        expected_volume_share = current_volume * 100 / national_current if national_current else 0.0
+        expected_eds_share = active_eds * 100 / national_active if national_active else 0.0
+        expected_intensity = (
+            current_volume / len(period.months) / active_eds if active_eds else 0.0
+        )
+        if not math.isclose(
+            float(summary_numeric["PARTICIPACION_VOLUMEN_NACIONAL_PCT"].iloc[index]),
+            expected_volume_share,
+            rel_tol=0,
+            abs_tol=1e-4,
+        ):
+            raise ValueError("La participación nacional de volumen ZFD no es recalculable.")
+        if not math.isclose(
+            float(summary_numeric["PARTICIPACION_EDS_NACIONAL_PCT"].iloc[index]),
+            expected_eds_share,
+            rel_tol=0,
+            abs_tol=1e-4,
+        ):
+            raise ValueError("La participación nacional de EDS ZFD no es recalculable.")
+        if not math.isclose(
+            float(summary_numeric["GAL_MES_EDS_DESPACHADO"].iloc[index]),
+            expected_intensity,
+            rel_tol=0,
+            abs_tol=1e-4,
+        ):
+            raise ValueError("La intensidad gal/mes/EDS ZFD no es recalculable.")
+
+    product_zones = products["ZONA_FRONTERA"].astype(str).str.strip().str.upper()
+    product_names = products["PRODUCTO_CANONICO"].astype(str).str.strip().str.lower()
+    expected_products = {"corriente", "diesel", "extra"}
+    for zone in ("SI", "NO"):
+        found = set(product_names.loc[product_zones.eq(zone)])
+        if found != expected_products:
+            raise ValueError(f"zfd-productos.csv no contiene los tres productos para {zone}.")
+    product_volumes = _numeric_series(products, "VOLUMEN_DESPACHADO", "Productos ZFD")
+    product_shares = _numeric_series(
+        products, "PARTICIPACION_PRODUCTO_EN_ZONA_PCT", "Productos ZFD"
+    )
+    if (product_volumes < 0).any() or ((product_shares < 0) | (product_shares > 100)).any():
+        raise ValueError("Productos ZFD contiene volúmenes o participaciones fuera de rango.")
+    current_by_zone = summary.set_index("ZONA_FRONTERA")["VOLUMEN_DESPACHADO"]
+    for zone in ("SI", "NO"):
+        zone_mask = product_zones.eq(zone)
+        zone_total = float(current_by_zone.loc[zone])
+        if not math.isclose(
+            float(product_volumes[zone_mask].sum()), zone_total, rel_tol=0, abs_tol=1e-4
+        ):
+            raise ValueError(f"Los productos ZFD no suman el volumen de la zona {zone}.")
+        if not math.isclose(float(product_shares[zone_mask].sum()), 100.0, abs_tol=1e-4):
+            raise ValueError(f"Las participaciones de producto ZFD no suman 100% para {zone}.")
+        expected_shares = product_volumes[zone_mask] * 100 / zone_total
+        if not (product_shares[zone_mask] - expected_shares).abs().le(1e-4).all():
+            raise ValueError(f"Las participaciones de producto ZFD no son recalculables para {zone}.")
+
+    if len(municipalities) != 5:
+        raise ValueError(f"zfd-municipios.csv contiene {len(municipalities)} filas; se esperaban 5.")
+    ranks = _numeric_series(municipalities, "RANK_MUNICIPIO", "Municipios ZFD")
+    if ranks.tolist() != [1, 2, 3, 4, 5]:
+        raise ValueError("RANK_MUNICIPIO debe ser consecutivo de 1 a 5.")
+    municipal_volumes = _numeric_series(
+        municipalities, "VOLUMEN_DESPACHADO", "Municipios ZFD"
+    )
+    municipal_shares = _numeric_series(
+        municipalities, "PARTICIPACION_VOLUMEN_FRONTERA_PCT", "Municipios ZFD"
+    )
+    if (municipal_volumes <= 0).any() or not municipal_volumes.is_monotonic_decreasing:
+        raise ValueError("El Top 5 municipal ZFD debe estar ordenado por volumen descendente.")
+    if ((municipal_shares < 0) | (municipal_shares > 100)).any():
+        raise ValueError("La participación municipal ZFD debe estar entre 0 y 100.")
+    frontier_total = float(current_by_zone.loc["SI"])
+    expected_municipal_shares = municipal_volumes * 100 / frontier_total
+    if not (municipal_shares - expected_municipal_shares).abs().le(1e-4).all():
+        raise ValueError("La participación municipal ZFD no es recalculable.")
+
+    manifest_path = processed_dir / "zfd-manifest.json"
+    if not manifest_path.exists():
+        raise ValueError(f"No existe el manifiesto requerido: {manifest_path}")
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise ValueError("zfd-manifest.json no es JSON válido.") from error
+    if not isinstance(manifest, dict):
+        raise ValueError("zfd-manifest.json debe contener un objeto JSON.")
+    expected_manifest = {
+        "SchemaVersion": 1,
+        "Report": "eds_frontera",
+        "Status": "complete",
+        "Catalog": "SBI-Ordenes-Pedidos",
+        "Cube": "Ordenes-Pedidos",
+        "AgentsCatalog": "SBI-Agentes",
+        "AgentsCube": "Agentes",
+        "Year": period.year,
+        "Months": list(period.months),
+        "PeriodLabel": period.code,
+        "Measure": "dispatched",
+        "Products": [
+            "BIODIESEL CON MEZCLA",
+            "GASOLINA MOTOR CORRIENTE",
+            "GASOLINA MOTOR EXTRA",
+        ],
+        "BuyerScope": "ESTACION DE SERVICIO AUTOMOTRIZ",
+        "TopMunicipalities": 5,
+        "SummaryRowCount": 3,
+        "ProductRowCount": 6,
+        "MunicipalityRowCount": 5,
+    }
+    mismatches = [key for key, value in expected_manifest.items() if manifest.get(key) != value]
+    if mismatches:
+        raise ValueError("El manifiesto ZFD es incompatible en: " + ", ".join(mismatches) + ".")
+    if not str(manifest.get("ActiveEdsQueriedAtUtc", "")).strip():
+        raise ValueError("El manifiesto ZFD no contiene la fecha de consulta de EDS activas.")
+    return cast(dict[str, Any], manifest)
+
+
 def validate_processed(
     period: PeriodSpec,
     processed_dir: Path,
@@ -200,6 +400,7 @@ def validate_processed(
         {"PERIODO", "ANO", "MES", "NOMBRE", "VOLUMEN_DESPACHADO", "PARTICIPACION_TOTAL"},
     )
     _, eds_top_manifest = _validate_eds_top(period, processed_dir)
+    zfd_manifest = _validate_zfd(period, processed_dir)
     historical_end_period = f"{period.year:04d}-{period.months[-1]:02d}"
     historical_data = prepare_historical_shares(
         historical,
@@ -264,6 +465,7 @@ def validate_processed(
             )
         ),
         "sicom_eds_top": tuple(int(month) for month in eds_top_manifest["Months"]),
+        "sicom_zfd": tuple(int(month) for month in zfd_manifest["Months"]),
     }
     warnings: list[str] = []
     coverage_is_partial = False

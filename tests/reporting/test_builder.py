@@ -27,10 +27,12 @@ def test_builder_writes_registered_pages_metrics_and_validation(
     metrics = builder.build_report(tmp_path / "unused.yml")
 
     assert sorted(path.name for path in context.pages_dir.glob("*.svg")) == [
-        f"page-{number:02d}.svg" for number in range(1, 14)
+        f"page-{number:02d}.svg" for number in range(1, 15)
     ]
-    assert metrics["pages"] == 13
+    assert metrics["pages"] == 14
+    assert metrics["zfd"]["measure"] == "VOLUMEN DESPACHADO"
     assert context.metrics_path.is_file()
     assert context.historical_validation_path.is_file()
     stored = json.loads(context.metrics_path.read_text(encoding="utf-8"))
     assert stored["national_variation_pct"] == metrics["national_variation_pct"]
+    assert stored["zfd"] == metrics["zfd"]

@@ -8,7 +8,7 @@ import pytest
 from su_report.reporting.builder import PAGE_SPECS
 from su_report.reporting.context import ReportContext
 from su_report.reporting.data import ReportData
-from su_report.reporting.pages import page_01_cover, page_13_conclusions
+from su_report.reporting.pages import page_01_cover, page_13_conclusions, page_13_zfd
 
 
 @pytest.mark.parametrize("spec", PAGE_SPECS, ids=lambda spec: f"page-{spec.number:02d}-{spec.slug}")
@@ -66,5 +66,19 @@ def test_conclusions_return_metrics_and_keep_text_weight(
         for number in range(1, 6):
             assert texts[f"conclusion-number-{number}"].get_weight() == "bold"
             assert texts[f"conclusion-body-{number}"].get_weight() == "normal"
+    finally:
+        plt.close(result.figure)
+
+
+def test_zfd_page_uses_dispatched_contract_and_period_title(
+    report_context: ReportContext,
+    report_data: ReportData,
+) -> None:
+    result = page_13_zfd.render(report_context, report_data)
+    try:
+        texts = [text.get_text() for text in result.figure.texts]
+        assert "Zonas de frontera frente al resto del país — Q2 2026" in texts
+        assert any("No frontera +43,05 M" in text for text in texts)
+        assert any("Volumen despachado" in text for text in texts)
     finally:
         plt.close(result.figure)
