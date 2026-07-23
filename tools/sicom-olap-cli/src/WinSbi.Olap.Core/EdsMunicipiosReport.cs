@@ -14,10 +14,11 @@ public static class EdsMunicipiosReport
         int year,
         int? quarter,
         int? semester,
+        bool annual,
         string? months,
         string product)
     {
-        var period = ReportPeriods.Resolve(year, quarter, semester, months);
+        var period = ReportPeriods.Resolve(year, quarter, semester, annual, months);
 
         return new EdsMunicipiosReportOptions(
             period.Year,
@@ -30,10 +31,20 @@ public static class EdsMunicipiosReport
     public static EdsMunicipiosReportOptions CreateOptions(
         int year,
         int? quarter,
+        int? semester,
         string? months,
         string product)
     {
-        return CreateOptions(year, quarter, null, months, product);
+        return CreateOptions(year, quarter, semester, annual: false, months, product);
+    }
+
+    public static EdsMunicipiosReportOptions CreateOptions(
+        int year,
+        int? quarter,
+        string? months,
+        string product)
+    {
+        return CreateOptions(year, quarter, null, annual: false, months, product);
     }
 
     public static string DefaultOutputDirectory(EdsMunicipiosReportOptions options)

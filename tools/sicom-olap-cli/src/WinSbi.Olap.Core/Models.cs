@@ -179,6 +179,55 @@ public sealed record MayoristasReportResult(
     MdxTable? ProductSummaryTable,
     string EquivalentCommand);
 
+public sealed record MayoristasHistoricoYearPart(int Year, IReadOnlyList<int> Months);
+
+public sealed record MayoristasHistoricoReportOptions(
+    int StartYear,
+    int StartMonth,
+    int EndYear,
+    int EndMonth,
+    IReadOnlyList<MayoristasHistoricoYearPart> YearParts,
+    string PeriodLabel,
+    MayoristasMeasureSelection Measure,
+    MayoristasProductSelection Product,
+    EdsBuyerScope BuyerScope,
+    bool Resume);
+
+public sealed record MayoristasHistoricoPartManifest(
+    int Year,
+    IReadOnlyList<int> Months,
+    string Path,
+    int RowCount);
+
+public sealed record MayoristasHistoricoManifest(
+    int SchemaVersion,
+    string Report,
+    string Status,
+    string Catalog,
+    string Cube,
+    string Measure,
+    string Product,
+    string BuyerScope,
+    string ProviderType,
+    string StartPeriod,
+    string EndPeriod,
+    string GeneratedAtUtc,
+    string EquivalentCommand,
+    IReadOnlyList<MayoristasHistoricoPartManifest> Parts,
+    int DetailRowCount,
+    int MonthlyRowCount);
+
+public sealed record MayoristasHistoricoReportResult(
+    MayoristasHistoricoReportOptions Options,
+    string OutputDirectory,
+    string DetailCsvPath,
+    string MonthlyCsvPath,
+    string ManifestJsonPath,
+    IReadOnlyList<string> PartCsvPaths,
+    MdxTable DetailTable,
+    MdxTable MonthlyTable,
+    string EquivalentCommand);
+
 public sealed record EdsMunicipiosReportOptions(
     int Year,
     IReadOnlyList<int> Months,
@@ -221,6 +270,23 @@ public sealed record EdsInsightsReportResult(
     MdxTable TopEdsTable,
     MdxTable BorderSummaryTable,
     MdxTable BorderProductsTable,
+    string EquivalentCommand);
+
+public sealed record EdsTopReportOptions(
+    int Year,
+    IReadOnlyList<int> Months,
+    string PeriodLabel,
+    string PeriodCommandPart,
+    MayoristasMeasureSelection Measure,
+    MayoristasProductSelection Product,
+    int Top);
+
+public sealed record EdsTopReportResult(
+    EdsTopReportOptions Options,
+    string OutputDirectory,
+    string CsvPath,
+    string ManifestPath,
+    MdxTable Table,
     string EquivalentCommand);
 
 public sealed record EdsPercentilesWindowMonth(int Year, int Month);

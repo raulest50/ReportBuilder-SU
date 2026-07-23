@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Literal
 
 import typer
 from rich.console import Console
@@ -15,11 +15,10 @@ from su_report.pipeline import ReportPipeline
 from su_report.security import sanitize
 from su_report.settings import Settings
 
-
 console = Console()
 app = typer.Typer(
     name="su-report",
-    help="Generador trimestral y semestral de informes SU.",
+    help="Generador trimestral, semestral y anual de informes SU.",
     invoke_without_command=True,
     no_args_is_help=False,
     pretty_exceptions_show_locals=False,
@@ -31,15 +30,23 @@ olap_app.add_typer(olap_report_app, name="report")
 
 PeriodOption = Annotated[
     str,
-    typer.Option("--period", "-p", help="Periodo YYYY-Q1..Q4 o YYYY-S1..S2."),
+    typer.Option("--period", "-p", help="Periodo YYYY-Q1..Q4, YYYY-S1..S2 o YYYY-A."),
 ]
 SourceOption = Annotated[str, typer.Option("--source", help="Fuente secreta: liqs o agents.")]
 FormatOption = Annotated[str, typer.Option("--format", "-f", help="Formato: table, json o csv.")]
 OutputOption = Annotated[Path | None, typer.Option("--output", "-o", help="Archivo de salida opcional.")]
+CoverResolutionOption = Annotated[
+    Literal["1k", "2k", "4k"],
+    typer.Option(
+        "--cover-resolution",
+        help="Resolución del fondo de portada: 1k, 2k o 4k.",
+    ),
+]
 DEFAULT_PERIOD = PeriodSpec.previous_completed().code
 DEFAULT_MAYORISTAS_DIR = Path("data/manual-olap/mayoristas")
 DEFAULT_EDS_MUNICIPIOS_DIR = Path("data/manual-olap/eds-municipios")
 DEFAULT_EDS_INSIGHTS_DIR = Path("data/manual-olap/eds-insights")
+DEFAULT_EDS_TOP_DIR = Path("data/manual-olap/eds-top")
 DEFAULT_EDS_PERCENTILES_DIR = Path("data/manual-olap/eds-percentiles")
 
 
@@ -55,11 +62,14 @@ def _event(event: PipelineEvent) -> None:
     console.print(f"[{styles.get(event.level, 'white')}]{event.stage.value}:[/] {event.message}")
 
 
-def _execute_pipeline(operation: str, period_value: str) -> None:
+def _execute_pipeline(operation: str, period_value: str, cover_resolution: str = "2k") -> None:
     period = _period(period_value)
     pipeline = ReportPipeline(on_event=_event)
     try:
-        result = getattr(pipeline, operation)(period)
+        if operation == "fetch":
+            result = pipeline.fetch(period)
+        else:
+            result = getattr(pipeline, operation)(period, cover_resolution=cover_resolution)
     except (RuntimeError, ValueError, OSError) as error:
         console.print(f"[bold red]Error:[/] {sanitize(str(error))}")
         raise typer.Exit(1) from error
@@ -122,15 +132,21 @@ def fetch(period: PeriodOption = DEFAULT_PERIOD) -> None:
 
 
 @app.command()
-def render(period: PeriodOption = DEFAULT_PERIOD) -> None:
+def render(
+    period: PeriodOption = DEFAULT_PERIOD,
+    cover_resolution: CoverResolutionOption = "2k",
+) -> None:
     """Genera el PDF usando únicamente los CSV locales existentes."""
-    _execute_pipeline("render", period)
+    _execute_pipeline("render", period, cover_resolution)
 
 
 @app.command()
-def generate(period: PeriodOption = DEFAULT_PERIOD) -> None:
+def generate(
+    period: PeriodOption = DEFAULT_PERIOD,
+    cover_resolution: CoverResolutionOption = "2k",
+) -> None:
     """Actualiza todas las fuentes y genera el PDF final."""
-    _execute_pipeline("generate", period)
+    _execute_pipeline("generate", period, cover_resolution)
 
 
 @olap_app.command()
@@ -275,6 +291,21 @@ def report_eds_insights(
     """Genera el paquete analítico de EDS."""
     arguments = _report_arguments("eds_insights", period, output_dir, source, product)
     arguments.extend(["--top-cities", str(top_cities), "--top-eds", str(top_eds)])
+    _olap_run(arguments)
+
+
+@olap_report_app.command("eds-top")
+def report_eds_top(
+    period: PeriodOption = DEFAULT_PERIOD,
+    output_dir: Annotated[Path, typer.Option("--output-dir")] = DEFAULT_EDS_TOP_DIR,
+    source: SourceOption = "liqs",
+    product: Annotated[str, typer.Option("--product")] = "all",
+    measure: Annotated[str, typer.Option("--measure")] = "dispatched",
+    top: Annotated[int, typer.Option("--top", min=1)] = 20,
+) -> None:
+    """Genera el ranking enfocado de EDS por la medida seleccionada."""
+    arguments = _report_arguments("eds_top", period, output_dir, source, product)
+    arguments[2:2] = ["--measure", measure, "--top", str(top)]
     _olap_run(arguments)
 
 

@@ -54,13 +54,18 @@ The short report command uses built-in MDX templates for recurrent Power BI CSV 
 ```powershell
 dotnet run -- report mayoristas --year 2026 --quarter 2
 dotnet run -- report mayoristas --year 2026 --semester 1
+dotnet run -- report mayoristas --year 2025 --annual
 dotnet run -- report mayoristas --year 2026 --months 4,5,6 --measure both --product corriente
+dotnet run -- report mayoristas_historico --start-year 2011 --start-month 1 --end-year 2026 --end-month 6 --measure dispatched --product all --buyer-scope eds_fluvial --resume
 dotnet run -- report eds_municipios --year 2026 --quarter 2
 dotnet run -- report eds_municipios --year 2026 --semester 1
+dotnet run -- report eds_municipios --year 2025 --annual
 dotnet run -- report eds_municipios --year 2026 --months 4,5,6 --product diesel
 dotnet run -- report eds_insights --year 2026 --quarter 2
 dotnet run -- report eds_insights --year 2026 --semester 1
 dotnet run -- report eds_insights --year 2026 --months 4,5,6 --product all --top-cities 7 --top-eds 20
+dotnet run -- report eds_top --year 2026 --quarter 2 --measure dispatched --product all --top 20
+dotnet run -- report eds_top --year 2025 --annual --measure dispatched --product all --top 20
 dotnet run -- report eds_percentiles --end-year 2026 --end-month 6
 dotnet run -- report eds_percentiles --end-year 2026 --end-month 6 --buyer-scope eds_fluvial
 ```
@@ -88,6 +93,29 @@ Generated files:
 - `mayoristas-detalle.csv`
 - `mayoristas-resumen.csv`
 - `mayoristas-productos.csv` when `--product all`
+
+`report mayoristas_historico` genera una serie mensual auditable y consulta un
+año por solicitud XMLA. De forma predeterminada usa volumen despachado, EDS
+automotrices y fluviales y los tres combustibles principales. No usa
+`TOPCOUNT`; la agrupación visual de `Otros` se realiza posteriormente en
+Python.
+
+Options:
+
+- `--start-year <yyyy>` y `--start-month <1-12>`
+- `--end-year <yyyy>` y `--end-month <1-12>`
+- `--measure dispatched|accepted`
+- `--product all|corriente|extra|diesel`
+- `--buyer-scope eds|eds_fluvial|eds_fluvial_industrial`
+- `--resume` para reutilizar partes compatibles registradas en el manifiesto
+- `--output-dir <path>`
+
+Generated files:
+
+- `mayoristas-historico-detalle.csv`
+- `mayoristas-historico-mensual.csv`
+- `mayoristas-historico-manifest.json`
+- `parts/<año>.csv`
 
 `report eds_municipios` generates monthly accepted-volume CSVs for automotive service stations by municipality.
 

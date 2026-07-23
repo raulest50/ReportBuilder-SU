@@ -12,9 +12,10 @@ from typing import Any
 class PeriodKind(StrEnum):
     QUARTER = "quarter"
     SEMESTER = "semester"
+    ANNUAL = "annual"
 
 
-_PERIOD_PATTERN = re.compile(r"^(?P<year>20\d{2})-(?P<kind>[QS])(?P<number>[1-4])$", re.IGNORECASE)
+_PERIOD_PATTERN = re.compile(r"^(?P<year>20\d{2})-(?:(?P<kind>[QS])(?P<number>[1-4])|(?P<annual>A))$", re.IGNORECASE)
 _ORDINALS = {1: "primer", 2: "segundo", 3: "tercer", 4: "cuarto"}
 
 
@@ -22,12 +23,18 @@ _ORDINALS = {1: "primer", 2: "segundo", 3: "tercer", 4: "cuarto"}
 class PeriodSpec:
     year: int
     kind: PeriodKind
-    number: int
+    number: int | None
 
     def __post_init__(self) -> None:
-        maximum = 4 if self.kind is PeriodKind.QUARTER else 2
         if not 2000 <= self.year <= 2100:
             raise ValueError("El año debe estar entre 2000 y 2100.")
+        if self.kind is PeriodKind.ANNUAL:
+            if self.number is not None:
+                raise ValueError("Un periodo anual no admite número.")
+            return
+        if self.number is None:
+            raise ValueError("Los periodos trimestrales y semestrales requieren número.")
+        maximum = 4 if self.kind is PeriodKind.QUARTER else 2
         if not 1 <= self.number <= maximum:
             noun = "trimestre" if self.kind is PeriodKind.QUARTER else "semestre"
             raise ValueError(f"El {noun} debe estar entre 1 y {maximum}.")
@@ -36,7 +43,9 @@ class PeriodSpec:
     def parse(cls, value: str) -> PeriodSpec:
         match = _PERIOD_PATTERN.fullmatch(value.strip())
         if match is None:
-            raise ValueError("Periodo inválido. Use YYYY-Q1..Q4 o YYYY-S1..S2.")
+            raise ValueError("Periodo inválido. Use YYYY-Q1..Q4, YYYY-S1..S2 o YYYY-A.")
+        if match.group("annual"):
+            return cls(year=int(match.group("year")), kind=PeriodKind.ANNUAL, number=None)
         kind_letter = match.group("kind").upper()
         kind = PeriodKind.QUARTER if kind_letter == "Q" else PeriodKind.SEMESTER
         number = int(match.group("number"))
@@ -54,11 +63,16 @@ class PeriodSpec:
 
     @property
     def code(self) -> str:
+        if self.kind is PeriodKind.ANNUAL:
+            return f"{self.year}-A"
         letter = "Q" if self.kind is PeriodKind.QUARTER else "S"
         return f"{self.year}-{letter}{self.number}"
 
     @property
     def months(self) -> tuple[int, ...]:
+        if self.kind is PeriodKind.ANNUAL:
+            return tuple(range(1, 13))
+        assert self.number is not None
         size = 3 if self.kind is PeriodKind.QUARTER else 6
         start = (self.number - 1) * size + 1
         return tuple(range(start, start + size))
@@ -69,10 +83,15 @@ class PeriodSpec:
 
     @property
     def noun(self) -> str:
+        if self.kind is PeriodKind.ANNUAL:
+            return "año"
         return "trimestre" if self.kind is PeriodKind.QUARTER else "semestre"
 
     @property
     def label(self) -> str:
+        if self.kind is PeriodKind.ANNUAL:
+            return f"año {self.year}"
+        assert self.number is not None
         return f"{_ORDINALS[self.number]} {self.noun} de {self.year}"
 
     @property
@@ -81,8 +100,11 @@ class PeriodSpec:
 
     @property
     def short_label(self) -> str:
+        if self.kind is PeriodKind.ANNUAL:
+            return "Año"
+        assert self.number is not None
         prefix = "Trim." if self.kind is PeriodKind.QUARTER else "Sem."
-        return f"{prefix} {self.number} {self.year}"
+        return f"{prefix} {self.number}"
 
     @property
     def cutoff_date(self) -> date:
@@ -93,6 +115,9 @@ class PeriodSpec:
         return tuple(range(self.year - count + 1, self.year + 1))
 
     def olap_arguments(self) -> list[str]:
+        if self.kind is PeriodKind.ANNUAL:
+            return ["--year", str(self.year), "--annual"]
+        assert self.number is not None
         option = "--quarter" if self.kind is PeriodKind.QUARTER else "--semester"
         return ["--year", str(self.year), option, str(self.number)]
 
@@ -175,4 +200,3 @@ class PipelineResult:
     paths: RunPaths
     warnings: list[str] = field(default_factory=list)
     metadata: dict[str, Any] = field(default_factory=dict)
-

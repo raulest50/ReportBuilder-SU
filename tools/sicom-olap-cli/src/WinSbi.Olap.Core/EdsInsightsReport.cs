@@ -14,12 +14,13 @@ public static class EdsInsightsReport
         int year,
         int? quarter,
         int? semester,
+        bool annual,
         string? months,
         string product,
         int topCities,
         int topEds)
     {
-        var period = ReportPeriods.Resolve(year, quarter, semester, months);
+        var period = ReportPeriods.Resolve(year, quarter, semester, annual, months);
 
         if (topCities < 1)
         {
@@ -44,12 +45,24 @@ public static class EdsInsightsReport
     public static EdsInsightsReportOptions CreateOptions(
         int year,
         int? quarter,
+        int? semester,
         string? months,
         string product,
         int topCities,
         int topEds)
     {
-        return CreateOptions(year, quarter, null, months, product, topCities, topEds);
+        return CreateOptions(year, quarter, semester, annual: false, months, product, topCities, topEds);
+    }
+
+    public static EdsInsightsReportOptions CreateOptions(
+        int year,
+        int? quarter,
+        string? months,
+        string product,
+        int topCities,
+        int topEds)
+    {
+        return CreateOptions(year, quarter, null, annual: false, months, product, topCities, topEds);
     }
 
     public static string DefaultOutputDirectory(EdsInsightsReportOptions options)
@@ -277,10 +290,18 @@ WHERE (
 """;
     }
 
-    public static string BuildTopEdsMdx(EdsInsightsReportOptions options)
+    public static string BuildTopEdsMdx(
+        EdsInsightsReportOptions options,
+        MayoristasMeasureSelection rankingMeasure = MayoristasMeasureSelection.Accepted)
     {
         var monthMembers = MonthMembers(options);
         var productMembers = ProductMembers(options.Product);
+        var rankingMember = rankingMeasure switch
+        {
+            MayoristasMeasureSelection.Accepted => "[Measures].[VOLUMEN ACEPTADO PERIODO]",
+            MayoristasMeasureSelection.Dispatched => "[Measures].[VOLUMEN DESPACHADO PERIODO]",
+            _ => throw new ArgumentOutOfRangeException(nameof(rankingMeasure), rankingMeasure, null)
+        };
 
         return $$"""
 WITH
@@ -302,10 +323,10 @@ SET [target_rows] AS
             * [COMPRADOR].[MUNICIPIO AGENTE COMPRADOR].[MUNICIPIO AGENTE COMPRADOR].Members
             * [COMPRADOR].[DEPARTAMENTO AGENTE COMPRADOR].[DEPARTAMENTO AGENTE COMPRADOR].Members
             * [COMPRADOR].[ZONA FRONTERA].[ZONA FRONTERA].Members,
-            [Measures].[VOLUMEN ACEPTADO PERIODO]
+            {{rankingMember}}
         ),
         {{options.TopEds}},
-        [Measures].[VOLUMEN ACEPTADO PERIODO]
+        {{rankingMember}}
     )
 SELECT
     {

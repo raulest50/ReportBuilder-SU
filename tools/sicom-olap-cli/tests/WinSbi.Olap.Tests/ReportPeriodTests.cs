@@ -26,6 +26,16 @@ public sealed class ReportPeriodTests
     }
 
     [Fact]
+    public void ResolvesAnnualPeriod()
+    {
+        var period = ReportPeriods.Resolve(2025, quarter: null, semester: null, annual: true, months: null);
+
+        Assert.Equal(Enumerable.Range(1, 12), period.Months);
+        Assert.Equal("2025-A", period.Label);
+        Assert.Equal("--annual", period.CommandPart);
+    }
+
+    [Fact]
     public void RejectsInvalidSemester()
     {
         Assert.Throws<ArgumentException>(() => ReportPeriods.Resolve(2026, quarter: null, semester: 0, months: null));
@@ -38,6 +48,7 @@ public sealed class ReportPeriodTests
         Assert.Throws<ArgumentException>(() => ReportPeriods.Resolve(2026, quarter: 1, semester: 1, months: null));
         Assert.Throws<ArgumentException>(() => ReportPeriods.Resolve(2026, quarter: null, semester: 1, months: "1,2,3"));
         Assert.Throws<ArgumentException>(() => ReportPeriods.Resolve(2026, quarter: 1, semester: null, months: "1,2,3"));
+        Assert.Throws<ArgumentException>(() => ReportPeriods.Resolve(2026, quarter: 1, semester: null, annual: true, months: null));
     }
 
     [Fact]

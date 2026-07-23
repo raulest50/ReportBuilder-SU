@@ -68,13 +68,22 @@ var yearOption = new Option<int?>("--year")
 {
     Description = "Report year, for example 2026."
 };
+var startYearOption = new Option<int?>("--start-year")
+{
+    Description = "Historical report start year, for example 2011."
+};
+var startMonthOption = new Option<int>("--start-month")
+{
+    Description = "Historical report start month: 1 through 12.",
+    DefaultValueFactory = _ => 1
+};
 var endYearOption = new Option<int?>("--end-year")
 {
-    Description = "Rolling-window end year, for example 2026."
+    Description = "Report end year, for example 2026."
 };
 var endMonthOption = new Option<int?>("--end-month")
 {
-    Description = "Rolling-window end month: 1 through 12."
+    Description = "Report end month: 1 through 12."
 };
 var quarterOption = new Option<int?>("--quarter")
 {
@@ -83,6 +92,10 @@ var quarterOption = new Option<int?>("--quarter")
 var semesterOption = new Option<int?>("--semester")
 {
     Description = "Calendar semester: 1 or 2."
+};
+var annualOption = new Option<bool>("--annual")
+{
+    Description = "Use the complete calendar year (January through December)."
 };
 var monthsOption = new Option<string?>("--months")
 {
@@ -93,6 +106,11 @@ var reportMeasureOption = new Option<string>("--measure")
     Description = "Report measure: accepted, dispatched, or both.",
     DefaultValueFactory = _ => "accepted"
 };
+var historicalMeasureOption = new Option<string>("--measure")
+{
+    Description = "Historical market-share measure: dispatched or accepted.",
+    DefaultValueFactory = _ => "dispatched"
+};
 var reportProductOption = new Option<string>("--product")
 {
     Description = "Report product: all, corriente, extra, or diesel.",
@@ -102,6 +120,15 @@ var buyerScopeOption = new Option<string>("--buyer-scope")
 {
     Description = "Buyer subtype scope for eds_percentiles: eds, eds_fluvial, or eds_fluvial_industrial.",
     DefaultValueFactory = _ => "eds"
+};
+var historicalBuyerScopeOption = new Option<string>("--buyer-scope")
+{
+    Description = "Historical buyer scope: eds, eds_fluvial, or eds_fluvial_industrial.",
+    DefaultValueFactory = _ => "eds_fluvial"
+};
+var resumeOption = new Option<bool>("--resume")
+{
+    Description = "Reuse compatible completed yearly parts from the historical manifest."
 };
 var outputDirOption = new Option<string?>("--output-dir")
 {
@@ -115,6 +142,16 @@ var topCitiesOption = new Option<int>("--top-cities")
 var topEdsOption = new Option<int>("--top-eds")
 {
     Description = "Number of top automotive service stations by accepted volume to include.",
+    DefaultValueFactory = _ => 20
+};
+var edsTopMeasureOption = new Option<string>("--measure")
+{
+    Description = "Top EDS ranking measure: dispatched or accepted.",
+    DefaultValueFactory = _ => "dispatched"
+};
+var topOption = new Option<int>("--top")
+{
+    Description = "Number of automotive service stations to include.",
     DefaultValueFactory = _ => 20
 };
 
@@ -234,6 +271,7 @@ var reportMayoristas = new Command("mayoristas", "Generate market-share CSVs for
 reportMayoristas.Options.Add(yearOption);
 reportMayoristas.Options.Add(quarterOption);
 reportMayoristas.Options.Add(semesterOption);
+reportMayoristas.Options.Add(annualOption);
 reportMayoristas.Options.Add(monthsOption);
 reportMayoristas.Options.Add(reportMeasureOption);
 reportMayoristas.Options.Add(reportProductOption);
@@ -247,6 +285,7 @@ reportMayoristas.SetAction(async (parseResult, cancellationToken) =>
         year,
         parseResult.GetValue(quarterOption),
         parseResult.GetValue(semesterOption),
+        parseResult.GetValue(annualOption),
         parseResult.GetValue(monthsOption),
         parseResult.GetValue(reportMeasureOption) ?? "accepted",
         parseResult.GetValue(reportProductOption) ?? "all");
@@ -264,10 +303,55 @@ reportMayoristas.SetAction(async (parseResult, cancellationToken) =>
     PrintMayoristasReportResult(result);
     return 0;
 });
+var reportMayoristasHistorico = new Command(
+    "mayoristas_historico",
+    "Generate auditable monthly historical market-share CSVs for wholesale fuel providers.");
+reportMayoristasHistorico.Options.Add(startYearOption);
+reportMayoristasHistorico.Options.Add(startMonthOption);
+reportMayoristasHistorico.Options.Add(endYearOption);
+reportMayoristasHistorico.Options.Add(endMonthOption);
+reportMayoristasHistorico.Options.Add(historicalMeasureOption);
+reportMayoristasHistorico.Options.Add(reportProductOption);
+reportMayoristasHistorico.Options.Add(historicalBuyerScopeOption);
+reportMayoristasHistorico.Options.Add(resumeOption);
+reportMayoristasHistorico.Options.Add(outputDirOption);
+AddConnectionOptions(reportMayoristasHistorico, includeDebug: true);
+reportMayoristasHistorico.SetAction(async (parseResult, cancellationToken) =>
+{
+    var startYear = parseResult.GetValue(startYearOption) ??
+                    throw new ArgumentException("--start-year is required for report mayoristas_historico.");
+    var endYear = parseResult.GetValue(endYearOption) ??
+                  throw new ArgumentException("--end-year is required for report mayoristas_historico.");
+    var endMonth = parseResult.GetValue(endMonthOption) ??
+                   throw new ArgumentException("--end-month is required for report mayoristas_historico.");
+    var options = MayoristasHistoricoReport.CreateOptions(
+        startYear,
+        parseResult.GetValue(startMonthOption),
+        endYear,
+        endMonth,
+        parseResult.GetValue(historicalMeasureOption) ?? "dispatched",
+        parseResult.GetValue(reportProductOption) ?? "all",
+        parseResult.GetValue(historicalBuyerScopeOption) ?? "eds_fluvial",
+        parseResult.GetValue(resumeOption));
+    var outputDirectory = parseResult.GetValue(outputDirOption) ?? MayoristasHistoricoReport.DefaultOutputDirectory(options);
+    var context = CreateContext(parseResult, format: "table", outputPath: null);
+    var client = XmlaClient.Create(context.Connection);
+    var equivalentCommand = MayoristasHistoricoReport.BuildEquivalentCommand(options, outputDirectory);
+    var result = await MayoristasHistoricoReport.GenerateAsync(
+        client,
+        options,
+        outputDirectory,
+        equivalentCommand,
+        context.DebugOptions,
+        cancellationToken);
+    PrintMayoristasHistoricoReportResult(result);
+    return 0;
+});
 var reportEdsMunicipios = new Command("eds_municipios", "Generate accepted-volume CSVs for automotive service stations by municipality.");
 reportEdsMunicipios.Options.Add(yearOption);
 reportEdsMunicipios.Options.Add(quarterOption);
 reportEdsMunicipios.Options.Add(semesterOption);
+reportEdsMunicipios.Options.Add(annualOption);
 reportEdsMunicipios.Options.Add(monthsOption);
 reportEdsMunicipios.Options.Add(reportProductOption);
 reportEdsMunicipios.Options.Add(outputDirOption);
@@ -280,6 +364,7 @@ reportEdsMunicipios.SetAction(async (parseResult, cancellationToken) =>
         year,
         parseResult.GetValue(quarterOption),
         parseResult.GetValue(semesterOption),
+        parseResult.GetValue(annualOption),
         parseResult.GetValue(monthsOption),
         parseResult.GetValue(reportProductOption) ?? "all");
     var outputDirectory = parseResult.GetValue(outputDirOption) ?? EdsMunicipiosReport.DefaultOutputDirectory(options);
@@ -300,6 +385,7 @@ var reportEdsInsights = new Command("eds_insights", "Generate Power BI CSVs for 
 reportEdsInsights.Options.Add(yearOption);
 reportEdsInsights.Options.Add(quarterOption);
 reportEdsInsights.Options.Add(semesterOption);
+reportEdsInsights.Options.Add(annualOption);
 reportEdsInsights.Options.Add(monthsOption);
 reportEdsInsights.Options.Add(reportProductOption);
 reportEdsInsights.Options.Add(topCitiesOption);
@@ -314,6 +400,7 @@ reportEdsInsights.SetAction(async (parseResult, cancellationToken) =>
         year,
         parseResult.GetValue(quarterOption),
         parseResult.GetValue(semesterOption),
+        parseResult.GetValue(annualOption),
         parseResult.GetValue(monthsOption),
         parseResult.GetValue(reportProductOption) ?? "all",
         parseResult.GetValue(topCitiesOption),
@@ -330,6 +417,44 @@ reportEdsInsights.SetAction(async (parseResult, cancellationToken) =>
         context.DebugOptions,
         cancellationToken);
     PrintEdsInsightsReportResult(result);
+    return 0;
+});
+var reportEdsTop = new Command("eds_top", "Generate a measure-consistent Top EDS CSV for report charts.");
+reportEdsTop.Options.Add(yearOption);
+reportEdsTop.Options.Add(quarterOption);
+reportEdsTop.Options.Add(semesterOption);
+reportEdsTop.Options.Add(annualOption);
+reportEdsTop.Options.Add(monthsOption);
+reportEdsTop.Options.Add(edsTopMeasureOption);
+reportEdsTop.Options.Add(reportProductOption);
+reportEdsTop.Options.Add(topOption);
+reportEdsTop.Options.Add(outputDirOption);
+AddConnectionOptions(reportEdsTop, includeDebug: true);
+reportEdsTop.SetAction(async (parseResult, cancellationToken) =>
+{
+    var year = parseResult.GetValue(yearOption) ??
+               throw new ArgumentException("--year is required for report eds_top.");
+    var options = EdsTopReport.CreateOptions(
+        year,
+        parseResult.GetValue(quarterOption),
+        parseResult.GetValue(semesterOption),
+        parseResult.GetValue(annualOption),
+        parseResult.GetValue(monthsOption),
+        parseResult.GetValue(edsTopMeasureOption) ?? "dispatched",
+        parseResult.GetValue(reportProductOption) ?? "all",
+        parseResult.GetValue(topOption));
+    var outputDirectory = parseResult.GetValue(outputDirOption) ?? EdsTopReport.DefaultOutputDirectory(options);
+    var context = CreateContext(parseResult, format: "table", outputPath: null);
+    var client = XmlaClient.Create(context.Connection);
+    var equivalentCommand = EdsTopReport.BuildEquivalentCommand(options, outputDirectory);
+    var result = await EdsTopReport.GenerateAsync(
+        client,
+        options,
+        outputDirectory,
+        equivalentCommand,
+        context.DebugOptions,
+        cancellationToken);
+    PrintEdsTopReportResult(result);
     return 0;
 });
 var reportEdsPercentiles = new Command("eds_percentiles", "Generate rolling 12-month EDS gal/month percentile CSVs.");
@@ -365,8 +490,10 @@ reportEdsPercentiles.SetAction(async (parseResult, cancellationToken) =>
     return 0;
 });
 report.Subcommands.Add(reportMayoristas);
+report.Subcommands.Add(reportMayoristasHistorico);
 report.Subcommands.Add(reportEdsMunicipios);
 report.Subcommands.Add(reportEdsInsights);
+report.Subcommands.Add(reportEdsTop);
 report.Subcommands.Add(reportEdsPercentiles);
 
 root.Subcommands.Add(diagnose);
@@ -568,6 +695,7 @@ async Task<int> RunInteractiveReportsAsync(CancellationToken cancellationToken)
     Console.WriteLine("2. EDS municipios");
     Console.WriteLine("3. EDS insights");
     Console.WriteLine("4. EDS percentiles");
+    Console.WriteLine("5. Mayoristas historico");
     Console.WriteLine();
     var choice = Prompt("Seleccione un reporte", "1");
     Console.WriteLine();
@@ -577,6 +705,7 @@ async Task<int> RunInteractiveReportsAsync(CancellationToken cancellationToken)
         "2" => await RunInteractiveEdsMunicipiosReportAsync(cancellationToken),
         "3" => await RunInteractiveEdsInsightsReportAsync(cancellationToken),
         "4" => await RunInteractiveEdsPercentilesReportAsync(cancellationToken),
+        "5" => await RunInteractiveMayoristasHistoricoReportAsync(cancellationToken),
         _ => InvalidChoice()
     };
 }
@@ -634,6 +763,51 @@ async Task<int> RunInteractiveMayoristasReportAsync(CancellationToken cancellati
         context.DebugOptions,
         cancellationToken);
     PrintMayoristasReportResult(result);
+    return 0;
+}
+
+async Task<int> RunInteractiveMayoristasHistoricoReportAsync(CancellationToken cancellationToken)
+{
+    var (defaultEndYear, defaultEndMonth) = PreviousCompletedMonth(DateTime.Today);
+    var startYear = PromptInt("Ano inicial", 2011);
+    var startMonth = PromptInt("Mes inicial", 1);
+    var endYear = PromptInt("Ano final", defaultEndYear);
+    var endMonth = PromptInt("Mes final", defaultEndMonth);
+    var measure = Prompt("Medida: dispatched, accepted", "dispatched");
+    var product = Prompt("Producto: all, corriente, extra, diesel", "all");
+    var options = MayoristasHistoricoReport.CreateOptions(
+        startYear,
+        startMonth,
+        endYear,
+        endMonth,
+        measure,
+        product,
+        "eds_fluvial",
+        resume: true);
+    var defaultOutputDirectory = InteractiveReportOutputDirectory("mayoristas_historico", options.PeriodLabel);
+    var outputDirectory = Prompt("Carpeta de salida", defaultOutputDirectory);
+    var timeout = PromptInt("Timeout XMLA en segundos", 600);
+    var context = CreateContextFromValues(
+        source: "liqs",
+        url: null,
+        user: null,
+        password: null,
+        authMode: "basic",
+        timeoutSeconds: timeout,
+        format: "table",
+        outputPath: null,
+        xmlaRequestOutputPath: null,
+        xmlaResponseOutputPath: null);
+    var client = XmlaClient.Create(context.Connection);
+    var equivalentCommand = MayoristasHistoricoReport.BuildEquivalentCommand(options, outputDirectory);
+    var result = await MayoristasHistoricoReport.GenerateAsync(
+        client,
+        options,
+        outputDirectory,
+        equivalentCommand,
+        context.DebugOptions,
+        cancellationToken);
+    PrintMayoristasHistoricoReportResult(result);
     return 0;
 }
 
@@ -901,6 +1075,23 @@ void PrintMayoristasReportResult(MayoristasReportResult result)
     Console.WriteLine(OutputFormatters.ToText(result.ProviderSummaryTable));
 }
 
+void PrintMayoristasHistoricoReportResult(MayoristasHistoricoReportResult result)
+{
+    Console.WriteLine("Reporte historico generado.");
+    Console.WriteLine($"Detalle: {Path.GetFullPath(result.DetailCsvPath)}");
+    Console.WriteLine($"Mensual: {Path.GetFullPath(result.MonthlyCsvPath)}");
+    Console.WriteLine($"Manifiesto: {Path.GetFullPath(result.ManifestJsonPath)}");
+    Console.WriteLine($"Partes anuales: {result.PartCsvPaths.Count}");
+    Console.WriteLine($"Filas detalle: {result.DetailTable.Rows.Count}");
+    Console.WriteLine($"Filas mensuales: {result.MonthlyTable.Rows.Count}");
+    Console.WriteLine();
+    Console.WriteLine("Comando equivalente:");
+    Console.WriteLine(result.EquivalentCommand);
+    Console.WriteLine();
+    Console.WriteLine("Primeras filas mensuales:");
+    Console.WriteLine(OutputFormatters.ToText(PreviewTable(result.MonthlyTable, 20)));
+}
+
 void PrintEdsMunicipiosReportResult(EdsMunicipiosReportResult result)
 {
     Console.WriteLine("Reporte generado.");
@@ -933,6 +1124,19 @@ void PrintEdsInsightsReportResult(EdsInsightsReportResult result)
     Console.WriteLine();
     Console.WriteLine("Primeras filas de banderas nacional:");
     Console.WriteLine(OutputFormatters.ToText(PreviewTable(result.NationalFlagsTable, 20)));
+}
+
+void PrintEdsTopReportResult(EdsTopReportResult result)
+{
+    Console.WriteLine("Reporte generado.");
+    Console.WriteLine($"Top EDS: {Path.GetFullPath(result.CsvPath)}");
+    Console.WriteLine($"Manifiesto: {Path.GetFullPath(result.ManifestPath)}");
+    Console.WriteLine($"Filas: {result.Table.Rows.Count}");
+    Console.WriteLine();
+    Console.WriteLine("Comando equivalente:");
+    Console.WriteLine(result.EquivalentCommand);
+    Console.WriteLine();
+    Console.WriteLine(OutputFormatters.ToText(PreviewTable(result.Table, 20)));
 }
 
 void PrintEdsPercentilesReportResult(EdsPercentilesReportResult result)

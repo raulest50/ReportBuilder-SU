@@ -12,11 +12,12 @@ public static class MayoristasReport
         int year,
         int? quarter,
         int? semester,
+        bool annual,
         string? months,
         string measure,
         string product)
     {
-        var period = ReportPeriods.Resolve(year, quarter, semester, months);
+        var period = ReportPeriods.Resolve(year, quarter, semester, annual, months);
 
         return new MayoristasReportOptions(
             period.Year,
@@ -30,11 +31,22 @@ public static class MayoristasReport
     public static MayoristasReportOptions CreateOptions(
         int year,
         int? quarter,
+        int? semester,
         string? months,
         string measure,
         string product)
     {
-        return CreateOptions(year, quarter, null, months, measure, product);
+        return CreateOptions(year, quarter, semester, annual: false, months, measure, product);
+    }
+
+    public static MayoristasReportOptions CreateOptions(
+        int year,
+        int? quarter,
+        string? months,
+        string measure,
+        string product)
+    {
+        return CreateOptions(year, quarter, null, annual: false, months, measure, product);
     }
 
     public static IReadOnlyList<int> MonthsForQuarter(int quarter)

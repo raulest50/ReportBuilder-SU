@@ -39,6 +39,8 @@ uv run su-report
 ```
 
 La aplicación detecta automáticamente `C:\Windows\Fonts`.
+También detecta Quarto en `PATH`, `C:\Program Files\Quarto\bin` y la carpeta
+local de programas del usuario.
 
 ## Credenciales
 
@@ -62,10 +64,15 @@ uv run su-report generate --period 2026-Q2
 ```
 
 El flujo obtiene Datos Abiertos, ejecuta los reportes C# de SICOM, normaliza los
-CSV, genera mapas/gráficos, crea 12 SVG y ensambla el PDF/A-2b con Quarto/Typst.
+CSV, genera mapas/gráficos, crea 13 SVG y ensambla el PDF/A-2b con Quarto/Typst.
 
 Si una fuente no contiene todos los meses, el informe se produce como borrador
 parcial y la condición queda registrada en portada y `manifest.json`.
+
+La extracción también crea el histórico mensual de mayoristas desde enero de
+2011 hasta el último mes solicitado. `render` no consulta SICOM: requiere el
+CSV y el manifiesto histórico local, valida los 186 meses para `2026-Q2` y
+genera la nueva página 5 vectorial antes del ensamblaje con Quarto/Typst.
 
 ## Estado de la entrega inicial
 

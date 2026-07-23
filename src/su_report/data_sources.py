@@ -9,7 +9,6 @@ import pandas as pd
 from su_report.models import PeriodSpec, RunPaths
 from su_report.settings import Settings
 
-
 PRODUCTS = (
     "GASOLINA MOTOR CORRIENTE",
     "GASOLINA MOTOR EXTRA",
@@ -30,6 +29,11 @@ def _quoted(values: tuple[str, ...] | tuple[int, ...]) -> str:
     return ", ".join(f"'{value}'" for value in values)
 
 
+def _quoted_months(values: tuple[int, ...]) -> str:
+    """Format months as the two-character text used by the Socrata dataset."""
+    return _quoted(tuple(f"{value:02d}" for value in values))
+
+
 def _write_frame(frame: pd.DataFrame, path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_suffix(path.suffix + ".tmp")
@@ -47,7 +51,13 @@ class SocrataExtractor:
     def _query(self, statement: str) -> pd.DataFrame:
         headers = {"X-App-Token": self.app_token} if self.app_token else None
         try:
-            with httpx.Client(timeout=self.timeout, follow_redirects=True, headers=headers) as client:
+            transport = httpx.HTTPTransport(retries=2)
+            with httpx.Client(
+                timeout=self.timeout,
+                follow_redirects=True,
+                headers=headers,
+                transport=transport,
+            ) as client:
                 response = client.get(self.endpoint, params={"$query": statement})
                 response.raise_for_status()
                 records = response.json()
@@ -62,7 +72,7 @@ class SocrataExtractor:
         years = period.history_years(history_years)
         products = _quoted(PRODUCTS)
         buyers = _quoted(BUYERS)
-        months = _quoted(period.months)
+        months = _quoted_months(period.months)
         history = _quoted(years)
         comparison_years = _quoted((period.comparison_year, period.year))
 

@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 import os
+import shutil
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 import yaml
 from dotenv import load_dotenv
-
 
 SECRET_KEYS = (
     "USER_CUBO_SICOM",
@@ -57,8 +57,30 @@ class Settings:
         return self.path("templates", "report.typ")
 
     @property
+    def quarto_executable(self) -> Path | None:
+        discovered = shutil.which("quarto")
+        if discovered:
+            return Path(discovered)
+        candidates: list[Path] = []
+        program_files = os.environ.get("PROGRAMFILES")
+        if program_files:
+            candidates.append(Path(program_files) / "Quarto" / "bin" / "quarto.exe")
+        local_app_data = os.environ.get("LOCALAPPDATA")
+        if local_app_data:
+            candidates.append(Path(local_app_data) / "Programs" / "Quarto" / "bin" / "quarto.exe")
+        return next((candidate for candidate in candidates if candidate.is_file()), None)
+
+    @property
     def history_years(self) -> int:
         return int(self.config["report"]["history_years"])
+
+    @property
+    def historical_wholesalers_start_period(self) -> str:
+        return str(self.config["report"]["historical_wholesalers_start_period"])
+
+    @property
+    def page_count(self) -> int:
+        return int(self.config["report"]["pages"])
 
     @property
     def secret_status(self) -> dict[str, bool]:
@@ -88,4 +110,3 @@ class Settings:
             if (directory / "segoeui.ttf").exists() and (directory / "segoeuib.ttf").exists():
                 return directory
         return None
-

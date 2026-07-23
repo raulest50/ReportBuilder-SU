@@ -3,11 +3,13 @@
 ## Flujo único
 
 ```text
-Periodo YYYY-Qn / YYYY-Sn
+Periodo YYYY-Qn / YYYY-Sn / YYYY-A
         |
         +-- Datos Abiertos 339g-zjac ----- volumen despachado
         |
         +-- SICOM OLAP incorporado ------- volumen aceptado
+        |                    +------------ histórico despachado de mayoristas
+        |                    +------------ Top 20 EDS por volumen despachado
                      |
                CSV crudos locales
                      |
@@ -15,7 +17,7 @@ Periodo YYYY-Qn / YYYY-Sn
                      |
            validación de meses y productos
                      |
-             Python genera 12 SVG
+             Python genera 13 SVG
                      |
            Quarto/Typst ensambla PDF/A-2b
                      |
@@ -26,6 +28,23 @@ La TUI y la CLI llaman `ReportPipeline`; ninguna contiene cálculos de negocio.
 `generate` siempre vuelve a consultar las fuentes. `render` no accede a red ni
 a SICOM y sirve para iterar sobre diseño con los CSV locales existentes.
 
+## Composición modular de páginas
+
+`src/su_report/reporting/builder.py` carga una configuración inmutable, prepara
+los datos una sola vez y ejecuta un registro explícito de páginas. Cada archivo
+de `src/su_report/reporting/pages/page_NN_*.py` implementa exclusivamente su
+composición y devuelve la figura en memoria; solo el builder escribe los SVG,
+las métricas y la validación histórica.
+
+Las constantes y primitivas visuales compartidas viven en `style.py`, las
+tablas genéricas en `tables.py` y las transformaciones de datos en `data.py`.
+La plantilla Typst permanece como ensamblador de los SVG terminados.
+
+Para incorporar una página se debe crear su módulo, registrar un `PageSpec` en
+el orden requerido, incrementar `report.pages`, añadir su prueba y actualizar
+la lista editorial. El builder rechaza números faltantes, duplicados o una
+cantidad distinta de la configurada.
+
 ## Contratos normalizados
 
 | Archivo | Grano | Medida |
@@ -34,35 +53,41 @@ a SICOM y sirve para iterar sobre diseño con los CSV locales existentes.
 | `geography-departments.csv` | año × producto × departamento | volumen despachado |
 | `geography-municipalities.csv` | año × producto × municipio | volumen despachado |
 | `mayoristas.csv` | proveedor × año × mes × producto × comprador | volumen aceptado |
+| `mayoristas-historico-mensual.csv` | mes × proveedor | volumen despachado y participación mensual |
 | `eds-municipios.csv` | municipio × año × mes × producto | volumen aceptado |
 | `eds-activas.csv` | municipio | EDS automotrices activas |
+| `eds-top-volumen.csv` | rango × EDS automotriz | volumen despachado y participación nacional |
 
 No se permite sumar, sustituir ni presentar como equivalentes las medidas de
 Datos Abiertos y SICOM. Los CSV son reproducibles, pero deliberadamente quedan
 fuera de Git.
 
-## Especificación de las 12 páginas
+## Especificación de las 13 páginas
 
 1. Portada y marca de borrador cuando el periodo está incompleto.
 2. Comportamiento mensual nacional y comparación interanual.
 3. Serie histórica del periodo equivalente por producto.
 4. Participación y ventas del periodo por mayorista.
-5. Participación histórica de mayoristas.
+5. Participación histórica mensual de mayoristas mediante áreas apiladas; volumen despachado a EDS automotrices y fluviales.
 6. Concentración y variación departamental de gasolina corriente.
 7. Concentración y variación departamental de ACPM.
 8. Comparación municipal destacada.
 9. Tablas departamentales.
 10. Tablas municipales.
 11. EDS activas, volumen aceptado y galones/mes/EDS por municipio.
-12. Conclusiones calculadas desde los datos del periodo.
+12. Top 20 EDS automotrices por volumen despachado y participación nacional.
+13. Conclusiones calculadas desde los datos del periodo.
 
 ## Reproducibilidad y límites
 
 - La selección temporal se deriva exclusivamente de `PeriodSpec`.
 - Cada ejecución escribe sus datos en `data/<periodo>` y sus salidas en
   `build/<periodo>` y `dist/<periodo>`.
+- El histórico de mayoristas comienza en `2011-01`, termina en el último mes
+  del periodo solicitado y conserva partes anuales reanudables dentro del snapshot.
 - El manifiesto registra meses encontrados, advertencias, contratos de medida,
   versiones, hashes de insumos normalizados y hash del PDF.
-- Un faltante parcial de meses produce un borrador visible. La ausencia total
-  de una fuente o de un producto requerido detiene el proceso.
-- La validación final exige 12 páginas de 13.833 × 8 pulgadas.
+- Un faltante parcial de meses en periodos trimestrales o semestrales produce
+  un borrador visible. Un informe anual exige los doce meses completos.
+- La ausencia total de una fuente o de un producto requerido detiene el proceso.
+- La validación final exige 13 páginas de 13.833 × 8 pulgadas.

@@ -39,7 +39,7 @@ def _version(executable: Path | None) -> str | None:
 
 def run_doctor(settings: Settings) -> list[Check]:
     uv = _command("uv")
-    quarto = _command("quarto")
+    quarto = settings.quarto_executable
     dotnet = _command("dotnet")
     uv_version = _version(uv)
     quarto_version = _version(quarto)
@@ -47,7 +47,7 @@ def run_doctor(settings: Settings) -> list[Check]:
     checks = [
         Check("uv", uv_version is not None, uv_version or "No encontrado en PATH"),
         Check("uv.lock", settings.path("uv.lock").exists(), str(settings.path("uv.lock"))),
-        Check("Quarto", quarto_version is not None, quarto_version or "No encontrado en PATH"),
+        Check("Quarto", quarto_version is not None, quarto_version or "No encontrado en PATH ni rutas estándar"),
         Check(
             ".NET SDK 10",
             dotnet_version is not None and dotnet_version.split(".", 1)[0] == "10",

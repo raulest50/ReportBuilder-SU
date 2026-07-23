@@ -12,6 +12,11 @@ public static class ReportPeriods
 {
     public static ReportPeriod Resolve(int year, int? quarter, int? semester, string? months)
     {
+        return Resolve(year, quarter, semester, annual: false, months);
+    }
+
+    public static ReportPeriod Resolve(int year, int? quarter, int? semester, bool annual, string? months)
+    {
         if (year < 2000 || year > 2100)
         {
             throw new ArgumentException("--year must be a four-digit year.");
@@ -19,12 +24,14 @@ public static class ReportPeriods
 
         var hasQuarter = quarter.HasValue;
         var hasSemester = semester.HasValue;
+        var hasAnnual = annual;
         var hasMonths = !string.IsNullOrWhiteSpace(months);
-        var selectedPeriodKinds = new[] { hasQuarter, hasSemester, hasMonths }.Count(static selected => selected);
+        var selectedPeriodKinds = new[] { hasQuarter, hasSemester, hasAnnual, hasMonths }.Count(static selected => selected);
 
         if (selectedPeriodKinds != 1)
         {
-            throw new ArgumentException("Use exactly one of --quarter <1-4>, --semester <1-2>, or --months <csv>.");
+            throw new ArgumentException(
+                "Use exactly one of --quarter <1-4>, --semester <1-2>, --annual, or --months <csv>.");
         }
 
         if (hasQuarter)
@@ -37,6 +44,11 @@ public static class ReportPeriods
         {
             var resolvedMonths = MonthsForSemester(semester!.Value);
             return new ReportPeriod(year, resolvedMonths, $"{year}-S{semester.Value}", $"--semester {semester.Value}");
+        }
+
+        if (hasAnnual)
+        {
+            return new ReportPeriod(year, Enumerable.Range(1, 12).ToList(), $"{year}-A", "--annual");
         }
 
         var manualMonths = ParseMonths(months!);

@@ -11,15 +11,16 @@ import numpy as np
 import pandas as pd
 from matplotlib.collections import PatchCollection
 from matplotlib.colors import LinearSegmentedColormap, TwoSlopeNorm
-from matplotlib.path import Path as MplPath
 from matplotlib.patches import PathPatch
+from matplotlib.path import Path as MplPath
 
 from su_report.map_geometry import draw_department_contours, visible_features
-
 
 EXCLUDED_DEPARTMENT = "ARCHIPIELAGO DE SAN ANDRES, SANTA CATALINA Y PROVIDENCIA"
 NO_DATA_COLOR = "#f2f2f2"
 SATURATION_LIMIT_PCT = 12.0
+MUNICIPAL_BOUNDARY_COLOR = "#ffffff"
+MUNICIPAL_BOUNDARY_WIDTH = 0.015
 RED_GRAY_GREEN = LinearSegmentedColormap.from_list(
     "red_gray_green",
     [(0.0, "#8f1d1d"), (0.5, NO_DATA_COLOR), (1.0, "#147a38")],
@@ -31,6 +32,14 @@ def _normalize(value: object) -> str:
     text = unicodedata.normalize("NFKD", str(value).upper())
     text = "".join(character for character in text if not unicodedata.combining(character))
     return " ".join(text.replace(",", " ").split())
+
+
+def _compact_period_label(period_short: str) -> str:
+    prefixes = (("Trim.", "Q"), ("Sem.", "S"))
+    for prefix, replacement in prefixes:
+        if period_short.startswith(prefix):
+            return f"{replacement}{period_short.removeprefix(prefix).strip()}"
+    return period_short
 
 
 def _features(path: Path) -> list[dict[str, Any]]:
@@ -118,8 +127,8 @@ def draw_variation_map(
         patches,
         cmap=RED_GRAY_GREEN,
         norm=norm,
-        linewidths=0.06,
-        edgecolors="#ffffff",
+        linewidths=MUNICIPAL_BOUNDARY_WIDTH,
+        edgecolors=MUNICIPAL_BOUNDARY_COLOR,
         zorder=1,
     )
     collection.set_array(np.asarray(values, dtype="float64"))
@@ -130,10 +139,13 @@ def draw_variation_map(
     axis.set_xlim(min_x, max_x)
     axis.set_ylim(min_y, max_y)
     axis.set_aspect("equal", adjustable="box")
+    period_label = _compact_period_label(period_short)
     axis.set_title(
-        f"{product.title()}\n{period_short} {comparison_year} vs {period_short} {base_year}",
-        fontsize=10,
+        f"{product.upper()}\n{period_label} {comparison_year} vs {period_label} {base_year}",
+        fontsize=11.5,
         fontweight="bold",
+        linespacing=1.05,
+        pad=8,
     )
     axis.axis("off")
     colorbar = axis.figure.colorbar(collection, ax=axis, fraction=0.034, pad=0.01, extend="both")

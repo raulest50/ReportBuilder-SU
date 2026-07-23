@@ -2,7 +2,7 @@
 
 ## Propósito
 
-`ReportBuilder-SU` genera informes PDF trimestrales y semestrales de 12 páginas.
+`ReportBuilder-SU` genera informes PDF trimestrales, semestrales y anuales de 13 páginas.
 Es un proyecto independiente y multiplataforma. No debe depender de rutas del
 workspace que lo originó.
 
@@ -64,9 +64,9 @@ dotnet test tools/sicom-olap-cli/tests/WinSbi.Olap.Tests/WinSbi.Olap.Tests.cspro
 
 ## Contratos y calidad
 
-- Periodos aceptados: `YYYY-Q1..Q4` y `YYYY-S1..S2`.
+- Periodos aceptados: `YYYY-Q1..Q4`, `YYYY-S1..S2` y `YYYY-A`.
 - Un periodo incompleto genera un PDF marcado como parcial, no un fallo.
-- Salida esperada: 12 páginas, 13.833 × 8 pulgadas y PDF/A-2b.
+- Salida esperada: 13 páginas, 13.833 × 8 pulgadas y PDF/A-2b.
 - El manifiesto debe registrar fuentes, meses encontrados, advertencias, hashes
   y versiones de herramientas, pero nunca secretos.
 - Antes de cambiar el diseño, comparar contra el PDF de referencia de 2026-Q2.

@@ -30,7 +30,7 @@ from su_report.settings import Settings
 
 class ReportBuilderApp(App[None]):
     TITLE = "ReportBuilder-SU"
-    SUB_TITLE = "Informes trimestrales y semestrales"
+    SUB_TITLE = "Informes trimestrales, semestrales y anuales"
     CSS = """
     Screen { background: #f4f5f6; color: #20252b; }
     Header, Footer { background: #173f35; color: white; }
@@ -71,7 +71,7 @@ class ReportBuilderApp(App[None]):
                     with Horizontal(classes="form-row"):
                         with Vertical(classes="field"):
                             yield Label("Periodo")
-                            yield Input(default_period, placeholder="2026-Q2 o 2026-S1", id="period")
+                            yield Input(default_period, placeholder="2026-Q2, 2026-S1 o 2025-A", id="period")
                         with Vertical(classes="field"):
                             yield Label("Operación")
                             yield Select(
@@ -105,6 +105,7 @@ class ReportBuilderApp(App[None]):
                                     ("Reporte mayoristas", "mayoristas"),
                                     ("Reporte EDS municipios", "eds_municipios"),
                                     ("Reporte EDS insights", "eds_insights"),
+                                    ("Reporte Top 20 EDS", "eds_top"),
                                     ("Reporte EDS percentiles", "eds_percentiles"),
                                 ],
                                 value="diagnose",
@@ -271,6 +272,8 @@ class ReportBuilderApp(App[None]):
             arguments.extend(["--measure", "accepted"])
         if operation == "eds_insights":
             arguments.extend(["--top-cities", "7", "--top-eds", "20"])
+        if operation == "eds_top":
+            arguments.extend(["--measure", "dispatched", "--top", "20"])
         arguments.extend(["--output-dir", str(output_dir)])
         return arguments
 

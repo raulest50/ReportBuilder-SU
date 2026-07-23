@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import subprocess
 import threading
+import time
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -73,6 +74,24 @@ class OlapGateway:
             raise OlapError(f"El motor OLAP terminó con código {return_code}.\n{tail}")
         return OlapResult(tuple(map(str, arguments)), return_code, output)
 
+    def _run_with_retries(
+        self,
+        arguments: Sequence[str],
+        *,
+        on_output: Callable[[str], None] | None = None,
+        attempts: int = 3,
+    ) -> OlapResult:
+        for attempt in range(1, attempts + 1):
+            try:
+                return self.run(arguments, on_output=on_output)
+            except OlapError:
+                if attempt == attempts:
+                    raise
+                if on_output is not None:
+                    on_output(f"Consulta OLAP interrumpida; reintentando ({attempt + 1}/{attempts}).")
+                time.sleep(3 * attempt)
+        raise AssertionError("El ciclo de reintentos OLAP terminó sin resultado.")
+
     def cancel(self) -> bool:
         with self._lock:
             process = self._process
@@ -91,7 +110,7 @@ class OlapGateway:
         *,
         on_output: Callable[[str], None] | None = None,
     ) -> OlapResult:
-        return self.run(
+        return self._run_with_retries(
             [
                 "report",
                 "mayoristas",
@@ -108,6 +127,43 @@ class OlapGateway:
             on_output=on_output,
         )
 
+    def report_mayoristas_historico(
+        self,
+        *,
+        start_year: int,
+        start_month: int,
+        end_year: int,
+        end_month: int,
+        output_dir: Path,
+        on_output: Callable[[str], None] | None = None,
+    ) -> OlapResult:
+        return self._run_with_retries(
+            [
+                "report",
+                "mayoristas_historico",
+                "--start-year",
+                str(start_year),
+                "--start-month",
+                str(start_month),
+                "--end-year",
+                str(end_year),
+                "--end-month",
+                str(end_month),
+                "--measure",
+                "dispatched",
+                "--product",
+                "all",
+                "--buyer-scope",
+                "eds_fluvial",
+                "--resume",
+                "--timeout",
+                "600",
+                "--output-dir",
+                str(output_dir),
+            ],
+            on_output=on_output,
+        )
+
     def report_eds_municipios(
         self,
         period_arguments: Sequence[str],
@@ -115,7 +171,7 @@ class OlapGateway:
         *,
         on_output: Callable[[str], None] | None = None,
     ) -> OlapResult:
-        return self.run(
+        return self._run_with_retries(
             [
                 "report",
                 "eds_municipios",
@@ -130,3 +186,28 @@ class OlapGateway:
             on_output=on_output,
         )
 
+    def report_eds_top(
+        self,
+        period_arguments: Sequence[str],
+        output_dir: Path,
+        *,
+        on_output: Callable[[str], None] | None = None,
+    ) -> OlapResult:
+        return self._run_with_retries(
+            [
+                "report",
+                "eds_top",
+                *period_arguments,
+                "--measure",
+                "dispatched",
+                "--product",
+                "all",
+                "--top",
+                "20",
+                "--timeout",
+                "600",
+                "--output-dir",
+                str(output_dir),
+            ],
+            on_output=on_output,
+        )

@@ -1,11 +1,29 @@
 from __future__ import annotations
 
+import json
+import math
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 import pandas as pd
 
-from su_report.models import PeriodSpec
+from su_report.charts.mayoristas_historico import prepare_historical_shares
+from su_report.models import PeriodKind, PeriodSpec
+
+TOP_EDS_COLUMNS = {
+    "RANK_EDS",
+    "CODIGO_SICOM_COMPRADOR",
+    "NOMBRE_COMERCIAL_COMPRADOR",
+    "MUNICIPIO",
+    "DEPARTAMENTO",
+    "ZONA_FRONTERA",
+    "VOLUMEN_ACEPTADO",
+    "VOLUMEN_DESPACHADO",
+    "MEDIDA_RANKING",
+    "VOLUMEN_RANKING",
+    "PARTICIPACION_NACIONAL_PCT",
+}
 
 
 @dataclass(frozen=True, slots=True)
@@ -13,6 +31,7 @@ class ValidationResult:
     partial: bool
     warnings: tuple[str, ...]
     months_by_source: dict[str, tuple[int, ...]]
+    historical_market_share: dict[str, object]
 
 
 def _require_columns(path: Path, columns: set[str]) -> pd.DataFrame:
@@ -25,7 +44,133 @@ def _require_columns(path: Path, columns: set[str]) -> pd.DataFrame:
     return frame
 
 
-def validate_processed(period: PeriodSpec, processed_dir: Path) -> ValidationResult:
+def _validate_historical_manifest(path: Path, start_period: str, end_period: str, row_count: int) -> dict[str, Any]:
+    if not path.exists():
+        raise ValueError(f"No existe el manifiesto histórico requerido: {path}")
+    try:
+        manifest = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise ValueError(f"El manifiesto histórico no es JSON válido: {path}") from error
+    if not isinstance(manifest, dict):
+        raise ValueError("El manifiesto histórico debe ser un objeto JSON.")
+    expected = {
+        "SchemaVersion": 1,
+        "Report": "mayoristas_historico",
+        "Status": "complete",
+        "Catalog": "SBI-Ordenes-Pedidos",
+        "Cube": "Ordenes-Pedidos",
+        "Measure": "dispatched",
+        "Product": "all",
+        "BuyerScope": "eds_fluvial",
+        "ProviderType": "DISTRIBUIDOR MAYORISTA",
+        "StartPeriod": start_period,
+        "EndPeriod": end_period,
+        "MonthlyRowCount": row_count,
+    }
+    mismatches = [key for key, value in expected.items() if manifest.get(key) != value]
+    if mismatches:
+        raise ValueError("El manifiesto histórico es incompatible en: " + ", ".join(mismatches) + ".")
+    return manifest
+
+
+def _validate_eds_top(period: PeriodSpec, processed_dir: Path) -> tuple[pd.DataFrame, dict[str, Any]]:
+    frame = _require_columns(processed_dir / "eds-top-volumen.csv", TOP_EDS_COLUMNS)
+    if len(frame) != 20:
+        raise ValueError(f"eds-top-volumen.csv contiene {len(frame)} filas; se esperaban 20.")
+
+    raw_codes = frame["CODIGO_SICOM_COMPRADOR"]
+    codes = raw_codes.astype(str).str.strip()
+    if raw_codes.isna().any() or codes.eq("").any() or codes.duplicated().any():
+        raise ValueError("Top EDS debe contener 20 códigos SICOM únicos y no vacíos.")
+
+    ranks = pd.to_numeric(frame["RANK_EDS"], errors="coerce")
+    if ranks.isna().any() or ranks.tolist() != list(range(1, 21)):
+        raise ValueError("RANK_EDS debe ser consecutivo de 1 a 20 y estar en ese orden.")
+
+    numeric_columns = (
+        "VOLUMEN_ACEPTADO",
+        "VOLUMEN_DESPACHADO",
+        "VOLUMEN_RANKING",
+        "PARTICIPACION_NACIONAL_PCT",
+    )
+    numeric: dict[str, pd.Series] = {}
+    for column in numeric_columns:
+        values = pd.to_numeric(frame[column], errors="coerce")
+        if values.isna().any() or not values.map(math.isfinite).all():
+            raise ValueError(f"Top EDS contiene valores no numéricos en {column}.")
+        if (values < 0).any():
+            raise ValueError(f"Top EDS contiene valores negativos en {column}.")
+        numeric[column] = values.astype(float)
+
+    measures = frame["MEDIDA_RANKING"].astype(str).str.strip().str.lower()
+    if not measures.eq("dispatched").all():
+        raise ValueError("MEDIDA_RANKING debe ser dispatched en todas las filas del informe.")
+    if not numeric["VOLUMEN_RANKING"].equals(numeric["VOLUMEN_DESPACHADO"]):
+        delta = (numeric["VOLUMEN_RANKING"] - numeric["VOLUMEN_DESPACHADO"]).abs().max()
+        if delta > 1e-6:
+            raise ValueError("VOLUMEN_RANKING no coincide con VOLUMEN_DESPACHADO.")
+
+    expected_order = sorted(
+        range(len(frame)),
+        key=lambda index: (-numeric["VOLUMEN_RANKING"].iloc[index], codes.iloc[index]),
+    )
+    if expected_order != list(range(len(frame))):
+        raise ValueError("Top EDS no está ordenado de forma descendente con desempate por código SICOM.")
+
+    if ((numeric["PARTICIPACION_NACIONAL_PCT"] < 0) | (numeric["PARTICIPACION_NACIONAL_PCT"] > 100)).any():
+        raise ValueError("PARTICIPACION_NACIONAL_PCT debe estar entre 0 y 100.")
+    for column in (
+        "NOMBRE_COMERCIAL_COMPRADOR",
+        "MUNICIPIO",
+        "DEPARTAMENTO",
+    ):
+        if frame[column].isna().any() or frame[column].astype(str).str.strip().eq("").any():
+            raise ValueError(f"Top EDS contiene valores vacíos en {column}.")
+
+    manifest_path = processed_dir / "eds-top-manifest.json"
+    if not manifest_path.exists():
+        raise ValueError(f"No existe el manifiesto requerido: {manifest_path}")
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise ValueError("eds-top-manifest.json no es JSON válido.") from error
+    expected_manifest = {
+        "SchemaVersion": 1,
+        "Report": "eds_top",
+        "Status": "complete",
+        "Catalog": "SBI-Ordenes-Pedidos",
+        "Cube": "Ordenes-Pedidos",
+        "Year": period.year,
+        "Months": list(period.months),
+        "PeriodLabel": period.code,
+        "Measure": "dispatched",
+        "Product": "all",
+        "Products": [
+            "BIODIESEL CON MEZCLA",
+            "GASOLINA MOTOR CORRIENTE",
+            "GASOLINA MOTOR EXTRA",
+        ],
+        "BuyerScope": "ESTACION DE SERVICIO AUTOMOTRIZ",
+        "Top": 20,
+        "RowCount": 20,
+    }
+    mismatches = [key for key, value in expected_manifest.items() if manifest.get(key) != value]
+    if mismatches:
+        raise ValueError("El manifiesto Top EDS es incompatible en: " + ", ".join(mismatches) + ".")
+    national_volume = pd.to_numeric(pd.Series([manifest.get("NationalVolume")]), errors="coerce").iloc[0]
+    if pd.isna(national_volume) or float(national_volume) <= 0:
+        raise ValueError("El manifiesto Top EDS no contiene un volumen nacional válido.")
+    recalculated = numeric["VOLUMEN_RANKING"] * 100.0 / float(national_volume)
+    if (recalculated - numeric["PARTICIPACION_NACIONAL_PCT"]).abs().max() > 1e-6:
+        raise ValueError("La participación nacional del Top EDS no es recalculable desde el manifiesto.")
+    return frame, manifest
+
+
+def validate_processed(
+    period: PeriodSpec,
+    processed_dir: Path,
+    historical_start_period: str = "2011-01",
+) -> ValidationResult:
     national = _require_columns(
         processed_dir / "national-monthly.csv",
         {"volumen_total", "anio_despacho", "mes_despacho", "producto"},
@@ -49,6 +194,23 @@ def validate_processed(period: PeriodSpec, processed_dir: Path) -> ValidationRes
     active_eds = _require_columns(
         processed_dir / "eds-activas.csv",
         {"CODIGO_DANE_MUNICIPIO", "EDS_AUTOMOTRIZ_ACTIVAS"},
+    )
+    historical = _require_columns(
+        processed_dir / "mayoristas-historico-mensual.csv",
+        {"PERIODO", "ANO", "MES", "NOMBRE", "VOLUMEN_DESPACHADO", "PARTICIPACION_TOTAL"},
+    )
+    _, eds_top_manifest = _validate_eds_top(period, processed_dir)
+    historical_end_period = f"{period.year:04d}-{period.months[-1]:02d}"
+    historical_data = prepare_historical_shares(
+        historical,
+        historical_start_period,
+        historical_end_period,
+    )
+    _validate_historical_manifest(
+        processed_dir / "mayoristas-historico-manifest.json",
+        historical_start_period,
+        historical_end_period,
+        len(historical),
     )
 
     expected = set(period.months)
@@ -89,6 +251,19 @@ def validate_processed(period: PeriodSpec, processed_dir: Path) -> ValidationRes
                 .tolist()
             )
         ),
+        "sicom_mayoristas_historico": tuple(
+            sorted(
+                pd.to_numeric(
+                    historical.loc[pd.to_numeric(historical["ANO"], errors="coerce").eq(period.year), "MES"],
+                    errors="coerce",
+                )
+                .dropna()
+                .astype(int)
+                .unique()
+                .tolist()
+            )
+        ),
+        "sicom_eds_top": tuple(int(month) for month in eds_top_manifest["Months"]),
     }
     warnings: list[str] = []
     coverage_is_partial = False
@@ -97,6 +272,11 @@ def validate_processed(period: PeriodSpec, processed_dir: Path) -> ValidationRes
             raise ValueError(f"{source}: no contiene datos para {period.code}.")
         missing = expected - set(found)
         if missing:
+            if period.kind is PeriodKind.ANNUAL:
+                raise ValueError(
+                    f"{source}: el informe anual requiere enero-diciembre completos; "
+                    f"faltan meses {', '.join(map(str, sorted(missing)))}."
+                )
             coverage_is_partial = True
             warnings.append(f"{source}: faltan meses {', '.join(map(str, sorted(missing)))}")
 
@@ -153,6 +333,11 @@ def validate_processed(period: PeriodSpec, processed_dir: Path) -> ValidationRes
             )
             missing_months = expected - found_months
             if missing_months:
+                if period.kind is PeriodKind.ANNUAL:
+                    raise ValueError(
+                        f"{label} / {product}: el informe anual requiere enero-diciembre completos; "
+                        f"faltan meses {', '.join(map(str, sorted(missing_months)))}."
+                    )
                 coverage_is_partial = True
                 warnings.append(
                     f"{label} / {product}: faltan meses {', '.join(map(str, sorted(missing_months)))}"
@@ -173,4 +358,14 @@ def validate_processed(period: PeriodSpec, processed_dir: Path) -> ValidationRes
         if (values < 0).any():
             warnings.append(f"{label} contiene volúmenes negativos.")
 
-    return ValidationResult(coverage_is_partial, tuple(warnings), months_by_source)
+    share_sums = historical_data.shares.sum(axis=1)
+    historical_summary: dict[str, object] = {
+        "start_period": historical_start_period,
+        "end_period": historical_end_period,
+        "month_count": len(historical_data.shares),
+        "input_row_count": historical_data.input_row_count,
+        "monthly_share_sum_min": float(share_sums.min()),
+        "monthly_share_sum_max": float(share_sums.max()),
+        "max_source_share_delta": historical_data.max_source_share_delta,
+    }
+    return ValidationResult(coverage_is_partial, tuple(warnings), months_by_source, historical_summary)

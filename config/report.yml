@@ -2,7 +2,8 @@ report:
   title: "Mercado de combustibles líquidos en Colombia"
   area: "Coordinación de Regulación y Análisis de Sector"
   history_years: 5
-  pages: 12
+  historical_wholesalers_start_period: "2011-01"
+  pages: 13
   pdf_standard: "a-2b"
   page_width_inches: 13.833
   page_height_inches: 8.0
@@ -30,6 +31,10 @@ business_rules:
     - "GASOLINA MOTOR CORRIENTE"
     - "GASOLINA MOTOR EXTRA"
     - "BIODIESEL CON MEZCLA"
+  historical_wholesalers:
+    measure: "dispatched"
+    product: "all"
+    buyer_scope: "eds_fluvial"
 
 assets:
   logo: "assets/brand/nuevo_logo.png"
@@ -40,4 +45,3 @@ paths:
   build: "build"
   dist: "dist"
   olap_project: "tools/sicom-olap-cli/src/WinSbi.Olap.Cli/WinSbi.Olap.Cli.csproj"
-
